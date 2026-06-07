@@ -1,0 +1,15 @@
+# uv environment and cache (kept local to the project per AGENTS.md)
+.venv/
+.uv_cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# Generated datasets (data itself is not versioned; lineage manifest describes it)
+data/
+*.jsonl
+!docs/**/*.jsonl
