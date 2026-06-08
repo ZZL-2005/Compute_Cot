@@ -20,7 +20,7 @@ import sympy as sp
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_factor, fmt_interval, fmt_point_set, fmt_poly, fmt_union
+from mathgen.formatting import fmt_factor, fmt_interval, fmt_point_set, fmt_poly, fmt_union, paren_if_negative
 from mathgen.verify import X, check_solution, interval_set, quadratic_solution_set, sets_equal
 
 ALL_REALS = "(-∞, +∞)"
@@ -220,7 +220,7 @@ def gen_quadratic_inequality_no_real_root(rng: random.Random, cfg: GenConfig) ->
         reason = f"the expression is always {'positive' if always_positive else 'negative'}, which never matches the inequality"
 
     trace = [
-        TraceStep(op="compute_discriminant", text=f"Compute the discriminant: {B}^2 - 4×{a}×{C} = {disc} < 0, so there are no real roots.", meta={"discriminant": disc}),
+        TraceStep(op="compute_discriminant", text=f"Compute the discriminant: {paren_if_negative(B)}^2 - 4×{paren_if_negative(a)}×{paren_if_negative(C)} = {disc} < 0, so there are no real roots.", meta={"discriminant": disc}),
         TraceStep(op="determine_opening_direction", text=f"The leading coefficient is {a}, so the parabola opens {'upward' if a > 0 else 'downward'} and stays entirely {'above' if always_positive else 'below'} the x-axis.", meta={"leading_coefficient": a}),
         TraceStep(op="determine_sign_intervals", text=f"Because there are no real roots, {reason}."),
         TraceStep(op="finish", text=f"Thus the solution set is {answer}.", after=answer),

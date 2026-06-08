@@ -2,7 +2,8 @@
 
 A sample is only allowed into the dataset if it is verified, has a non-empty
 trace and answer, uses the exact assistant format, contains no numbered list,
-no dirty renderer fragments, and its boxed answer matches the answer field.
+no dirty renderer fragments, its boxed answer matches the answer field, and the
+boxed answer is actually reached in the reasoning (the "no skipped steps" guard).
 """
 
 from __future__ import annotations
@@ -19,6 +20,12 @@ DIRTY_PATTERNS = ["+-", "+ -", "--", "/-", "×-", "÷-", "*-"]
 NUMBERED_LINE = re.compile(r"(?m)^\s*\d+\.\s")
 
 BOXED = re.compile(r"#### \\boxed\{(?P<ans>.*)\}\s*$", re.DOTALL)
+
+_WS = re.compile(r"\s+")
+
+
+def _strip_ws(s: str) -> str:
+    return _WS.sub("", s)
 
 
 def _reasoning_of(sample: Sample) -> str:
@@ -56,5 +63,13 @@ def validate_sample(sample: Sample) -> Tuple[bool, List[str]]:
     for pat in DIRTY_PATTERNS:
         if pat in content:
             problems.append(f"dirty fragment {pat!r}")
+
+    # "no skipped steps": the final boxed answer must actually be reached in the
+    # reasoning, not produced out of nowhere. Compare whitespace-insensitively so
+    # cosmetic gaps ("x = 10" vs "x=10") do not count as a mismatch.
+    if sample.answer:
+        norm_answer = _strip_ws(sample.answer)
+        if norm_answer and norm_answer not in _strip_ws(think_body):
+            problems.append("boxed answer is not derived in the reasoning (possible skipped step)")
 
     return (not problems), problems

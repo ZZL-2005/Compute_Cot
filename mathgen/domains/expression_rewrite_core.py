@@ -13,7 +13,7 @@ import sympy as sp
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_factor, fmt_poly, fmt_signed_term, paren_if_negative
+from mathgen.formatting import fmt_add, fmt_factor, fmt_mul, fmt_poly, fmt_signed_term, paren_if_negative, sum_text
 from mathgen.verify import X, check_equiv
 
 
@@ -57,12 +57,12 @@ def gen_collect_like_terms(rng: random.Random, cfg: GenConfig) -> Sample:
         ),
         TraceStep(
             op="collect_like_terms",
-            text=f"Add the x-coefficients: {'+'.join(str(c) for c in x_coeffs) if x_coeffs else '0'}={x_sum}, so the x-term is {fmt_signed_term(x_sum, 'x', first=True)}.",
+            text=f"Add the x-coefficients: {sum_text(x_coeffs) if x_coeffs else '0'}={x_sum}, so the x-term is {fmt_signed_term(x_sum, 'x', first=True)}.",
             meta={"x_sum": x_sum},
         ),
         TraceStep(
             op="collect_like_terms",
-            text=f"Add the constants: {'+'.join(str(c) for c in consts) if consts else '0'}={const_sum}.",
+            text=f"Add the constants: {sum_text(consts) if consts else '0'}={const_sum}.",
             meta={"const_sum": const_sum},
         ),
         TraceStep(op="finish", text=f"Combine to get {answer}.", after=answer),
@@ -143,7 +143,7 @@ def gen_factor_trinomial(rng: random.Random, cfg: GenConfig) -> Sample:
     answer = f"{fmt_factor(p)}{fmt_factor(q)}"
     trace = [
         TraceStep(op="set_up_factoring", text=f"Look for two numbers whose product is {c} and whose sum is {b}."),
-        TraceStep(op="find_factor_pair", text=f"The numbers {p} and {q} work because {paren_if_negative(p)}×{paren_if_negative(q)}={c} and {p}+{q}={b}.", meta={"p": p, "q": q, "product": c, "sum": b}),
+        TraceStep(op="find_factor_pair", text=f"The numbers {p} and {q} work because {fmt_mul(p, q)}={c} and {fmt_add(p, q)}={b}.", meta={"p": p, "q": q, "product": c, "sum": b}),
         TraceStep(op="write_factors", text=f"Therefore {expr_str}={answer}.", after=answer),
     ]
     return make_sample(

@@ -11,7 +11,9 @@ from mathgen.domains import (
     arithmetic_core,
     equation_inequality_core,
     expression_rewrite_core,
+    functions_core,
     quadratic_schema,
+    sequences_core,
 )
 
 Generator = Callable[[random.Random, GenConfig], Sample]
@@ -22,6 +24,8 @@ DOMAIN_MODULES = [
     expression_rewrite_core,
     equation_inequality_core,
     quadratic_schema,
+    functions_core,
+    sequences_core,
 ]
 
 

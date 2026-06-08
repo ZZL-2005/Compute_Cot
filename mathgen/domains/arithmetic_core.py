@@ -19,11 +19,13 @@ from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
 from mathgen.formatting import (
     decimal_string_from_int,
+    fmt_add,
     fmt_decimal_from_scaled,
     fmt_fraction,
     fmt_mul,
     fmt_radical,
     fmt_raw_fraction,
+    fmt_sub,
     paren_if_negative,
     parse_decimal_string,
     place_name,
@@ -31,6 +33,21 @@ from mathgen.formatting import (
     sqrt_simplify,
     sum_text,
 )
+
+
+def simplify_step_text(raw_num: int, raw_den: int, result: Fraction) -> str:
+    """Render the final 'simplify' step, avoiding the degenerate 'Simplify X to X.'
+
+    When ``raw_num/raw_den`` is already in lowest terms the wording says so
+    instead of claiming to simplify a fraction to itself.
+    """
+    raw_str = fmt_raw_fraction(raw_num, raw_den)
+    res_str = fmt_fraction(result)
+    if raw_str == res_str:
+        if result.denominator == 1:
+            return f"{raw_str} is already a whole number, so the result is {res_str}."
+        return f"The fraction {raw_str} is already in lowest terms, so the result is {res_str}."
+    return f"Simplify {raw_str} to {res_str}."
 
 
 # -----------------------------------------------------------------------------
@@ -177,10 +194,19 @@ def gen_integer_add_many(rng: random.Random, cfg: GenConfig) -> Sample:
     nums = [randint_digits(rng, rng.choice([digits - 1, digits])) for _ in range(count)]
     result = sum(nums)
 
-    trace = [
-        TraceStep(op="align_digits", text=f"Align all addends by place value: {', '.join(map(str, nums))}."),
-        TraceStep(op="sum_addends", text=f"Add the numbers together: {'+'.join(map(str, nums))}={result}."),
-    ]
+    running = nums[0]
+    trace: List[TraceStep] = [TraceStep(op="start_running_sum", text=f"Add the numbers left to right. Start with {nums[0]}.", meta={"running": running})]
+    for t in nums[1:]:
+        new_running = running + t
+        trace.append(
+            TraceStep(
+                op="add_term",
+                text=f"Add {t}: {fmt_add(running, t)}={new_running}.",
+                meta={"term": t, "running_before": running, "running_after": new_running},
+            )
+        )
+        running = new_running
+    trace.append(TraceStep(op="finish", text=f"Therefore, {'+'.join(map(str, nums))}={result}.", after=str(result)))
     return make_sample(
         "arithmetic.integer_add_many",
         f"Compute {'+'.join(map(str, nums))}.",
@@ -282,10 +308,23 @@ def gen_integer_mixed_add_sub(rng: random.Random, cfg: GenConfig) -> Sample:
         terms[0] = rng.randint(1, 30)
     expr = sum_text(terms)
     result = sum(terms)
-    trace = [
+    running = terms[0]
+    trace: List[TraceStep] = [
         TraceStep(op="rewrite_signed_sum", text=f"Read the expression as a sum of signed numbers: {', '.join(map(str, terms))}."),
-        TraceStep(op="add_signed_numbers", text=f"Add the signed numbers: {expr}={result}."),
+        TraceStep(op="start_running_sum", text=f"Combine them left to right. Start with {terms[0]}.", meta={"running": running}),
     ]
+    for t in terms[1:]:
+        new_running = running + t
+        verb = "Add" if t >= 0 else "Subtract"
+        trace.append(
+            TraceStep(
+                op="combine_term",
+                text=f"{verb} {abs(t)}: {fmt_add(running, t)}={new_running}.",
+                meta={"term": t, "running_before": running, "running_after": new_running},
+            )
+        )
+        running = new_running
+    trace.append(TraceStep(op="finish", text=f"Therefore, {expr}={result}.", after=str(result)))
     return make_sample(
         "arithmetic.integer_mixed_add_sub",
         f"Compute {expr}.",
@@ -485,20 +524,20 @@ def gen_fraction_add_sub(rng: random.Random, cfg: GenConfig, op: str) -> Sample:
         raw_num = e1 + e2
         result = Fraction(n1, d1) + Fraction(n2, d2)
         source = "arithmetic.fraction_addition"
-        user = f"Compute {fmt_raw_fraction(n1, d1)} + {fmt_raw_fraction(n2, d2)}."
-        combine_text = f"Add the numerators: {e1}+{e2}={raw_num}, so the result before simplification is {raw_num}/{lcm}."
+        user = f"Compute {fmt_raw_fraction(n1, d1)} + {paren_if_negative(fmt_raw_fraction(n2, d2))}."
+        combine_text = f"Add the numerators: {fmt_add(e1, e2)}={raw_num}, so the result before simplification is {fmt_raw_fraction(raw_num, lcm)}."
     else:
         raw_num = e1 - e2
         result = Fraction(n1, d1) - Fraction(n2, d2)
         source = "arithmetic.fraction_subtraction"
-        user = f"Compute {fmt_raw_fraction(n1, d1)} - {fmt_raw_fraction(n2, d2)}."
-        combine_text = f"Subtract the numerators: {e1}-{e2}={raw_num}, so the result before simplification is {raw_num}/{lcm}."
+        user = f"Compute {fmt_raw_fraction(n1, d1)} - {paren_if_negative(fmt_raw_fraction(n2, d2))}."
+        combine_text = f"Subtract the numerators: {fmt_sub(e1, e2)}={raw_num}, so the result before simplification is {fmt_raw_fraction(raw_num, lcm)}."
     trace = [
         TraceStep(op="find_common_denominator", text=f"Use common denominator lcm({d1},{d2})={lcm}."),
         TraceStep(op="convert_first_fraction", text=f"Convert {fmt_raw_fraction(n1, d1)} to denominator {lcm}: multiply numerator and denominator by {m1}, giving {e1}/{lcm}."),
         TraceStep(op="convert_second_fraction", text=f"Convert {fmt_raw_fraction(n2, d2)} to denominator {lcm}: multiply numerator and denominator by {m2}, giving {e2}/{lcm}."),
         TraceStep(op="combine_numerators", text=combine_text),
-        TraceStep(op="simplify_fraction", text=f"Simplify {raw_num}/{lcm} to {fmt_fraction(result)}."),
+        TraceStep(op="simplify_fraction", text=simplify_step_text(raw_num, lcm, result)),
     ]
     expected = Fraction(n1, d1) + Fraction(n2, d2) if op == "+" else Fraction(n1, d1) - Fraction(n2, d2)
     return make_sample(
@@ -529,13 +568,13 @@ def gen_fraction_multiplication(rng: random.Random, cfg: GenConfig) -> Sample:
     raw_den = d1 * d2
     result = Fraction(raw_num, raw_den)
     trace = [
-        TraceStep(op="multiply_numerators", text=f"Multiply the numerators: {n1}×{n2}={raw_num}."),
-        TraceStep(op="multiply_denominators", text=f"Multiply the denominators: {d1}×{d2}={raw_den}."),
-        TraceStep(op="simplify_fraction", text=f"Simplify {raw_num}/{raw_den} to {fmt_fraction(result)}."),
+        TraceStep(op="multiply_numerators", text=f"Multiply the numerators: {fmt_mul(n1, n2)}={raw_num}."),
+        TraceStep(op="multiply_denominators", text=f"Multiply the denominators: {fmt_mul(d1, d2)}={raw_den}."),
+        TraceStep(op="simplify_fraction", text=simplify_step_text(raw_num, raw_den, result)),
     ]
     return make_sample(
         "arithmetic.fraction_multiplication",
-        f"Compute {fmt_raw_fraction(n1, d1)} × {fmt_raw_fraction(n2, d2)}.",
+        f"Compute {fmt_raw_fraction(n1, d1)} × {paren_if_negative(fmt_raw_fraction(n2, d2))}.",
         trace,
         fmt_fraction(result),
         {"n1": n1, "d1": d1, "n2": n2, "d2": d2, "difficulty": diff},
@@ -556,13 +595,13 @@ def gen_fraction_division(rng: random.Random, cfg: GenConfig) -> Sample:
     result = Fraction(raw_num, raw_den)
     trace = [
         TraceStep(op="take_reciprocal", text=f"To divide by {fmt_raw_fraction(n2, d2)}, multiply by its reciprocal {fmt_raw_fraction(d2, n2)}."),
-        TraceStep(op="multiply_numerators", text=f"Multiply the numerators: {n1}×{d2}={raw_num}."),
-        TraceStep(op="multiply_denominators", text=f"Multiply the denominators: {d1}×{n2}={raw_den}."),
-        TraceStep(op="simplify_fraction", text=f"Simplify {raw_num}/{raw_den} to {fmt_fraction(result)}."),
+        TraceStep(op="multiply_numerators", text=f"Multiply the numerators: {fmt_mul(n1, d2)}={raw_num}."),
+        TraceStep(op="multiply_denominators", text=f"Multiply the denominators: {fmt_mul(d1, n2)}={raw_den}."),
+        TraceStep(op="simplify_fraction", text=simplify_step_text(raw_num, raw_den, result)),
     ]
     return make_sample(
         "arithmetic.fraction_division",
-        f"Compute {fmt_raw_fraction(n1, d1)} ÷ {fmt_raw_fraction(n2, d2)}.",
+        f"Compute {fmt_raw_fraction(n1, d1)} ÷ {paren_if_negative(fmt_raw_fraction(n2, d2))}.",
         trace,
         fmt_fraction(result),
         {"n1": n1, "d1": d1, "n2": n2, "d2": d2, "difficulty": diff},
@@ -574,7 +613,11 @@ def gen_mixed_number_to_improper(rng: random.Random, cfg: GenConfig) -> Sample:
     diff = pick_difficulty(rng, cfg)
     whole = rng.randint(1, {Difficulty.EASY: 5, Difficulty.MEDIUM: 12, Difficulty.HARD: 30}[diff])
     den = rng.randint(2, {Difficulty.EASY: 9, Difficulty.MEDIUM: 15, Difficulty.HARD: 25}[diff])
+    # Keep the fractional part in lowest terms; then whole*den+num is coprime to
+    # den as well, so the improper fraction needs no hidden simplification step.
     num = rng.randint(1, den - 1)
+    while math.gcd(num, den) != 1:
+        num = rng.randint(1, den - 1)
     improper_num = whole * den + num
     result = Fraction(improper_num, den)
     trace = [
@@ -936,6 +979,7 @@ def gen_percent_to_fraction_decimal(rng: random.Random, cfg: GenConfig) -> Sampl
         TraceStep(op="percent_means_per_100", text=f"{percent}% means {percent} per 100, so {percent}%={percent}/100."),
         TraceStep(op="simplify_fraction", text=f"Simplify {percent}/100 to {fmt_fraction(frac)}."),
         TraceStep(op="convert_to_decimal", text=f"Divide by 100 to move the decimal point two places left, giving {dec_str}."),
+        TraceStep(op="finish", text=f"So {percent}% equals the fraction {fmt_fraction(frac)} and the decimal {dec_str}, i.e. {fmt_fraction(frac)}, {dec_str}."),
     ]
     answer = f"{fmt_fraction(frac)}, {dec_str}"
     return make_sample(
@@ -989,6 +1033,7 @@ def gen_proportion_solve(rng: random.Random, cfg: GenConfig) -> Sample:
         TraceStep(op="cross_multiply", text=f"From {a}/{b} = {c}/x, cross multiply to get {a}x={b}×{c}."),
         TraceStep(op="multiply", text=f"Compute {b}×{c}={b * c}, so {a}x={b * c}."),
         TraceStep(op="divide_both_sides", text=f"Divide both sides by {a}: x={b * c}/{a}={x_val}."),
+        TraceStep(op="finish", text=f"So the solution is x={x_val}.", after=f"x={x_val}"),
     ]
     return make_sample(
         "ratio_percent.proportion_solve",

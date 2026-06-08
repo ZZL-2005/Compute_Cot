@@ -51,22 +51,24 @@ step by step derivation, no numbered list, no skipped steps
 #### \boxed{answer}
 ```
 
-## Implemented domains (phase 1)
-
-Priority domains from `des_instruct.md` sec 11 are implemented and verified:
+## Implemented domains
 
 | module | sources |
 | --- | --- |
-| `mathgen.domains.arithmetic_core` | integer add/sub (carry/borrow), long mult/div, fractions, decimals, powers, radicals, order of operations, sign rules, gcd/lcm, prime factorization, percent/proportion |
+| `mathgen.domains.arithmetic_core` | integer add/sub (carry/borrow), multi-addend & signed running sums, long mult/div, fractions, decimals, powers, radicals, order of operations, sign rules, gcd/lcm, prime factorization, percent/proportion |
 | `mathgen.domains.expression_rewrite_core` | collect like terms, distribute, expand, factor trinomial, exponent rules |
-| `mathgen.domains.equation_inequality_core` | one-/multi-step linear, parentheses, variable-on-both-sides, linear inequality (with sign-flip) |
+| `mathgen.domains.equation_inequality_core` | one-/multi-step linear, parentheses, variable-on-both-sides, linear inequality (sign-flip), **2×2 linear systems by elimination**, **quadratic formula** |
 | `mathgen.domains.quadratic_schema` | quadratic factoring + inequalities: two distinct roots, double root, no real root (incl. ℝ / ∅ / single-point / open vs closed endpoints) |
+| `mathgen.domains.functions_core` | function evaluation, composite function f(g(x)) |
+| `mathgen.domains.sequences_core` | arithmetic nth term, arithmetic series sum, geometric nth term |
 
 Verification (`mathgen/verify.py`) uses exact arithmetic (`int`, `Fraction`,
 `Decimal`) and `sympy` for symbolic equivalence and inequality solution sets.
 Sample-level discard rules (`mathgen/validate.py`) reject anything that fails
 verification, has an empty trace/answer, a numbered list, a dirty renderer
-fragment, or a boxed answer that disagrees with the `answer` field.
+fragment, a boxed answer that disagrees with the `answer` field, or a boxed
+answer that is **not actually derived in the reasoning** (the "no skipped steps"
+guard: the final answer must appear in the `<think>` derivation).
 
 ## Data lineage
 
