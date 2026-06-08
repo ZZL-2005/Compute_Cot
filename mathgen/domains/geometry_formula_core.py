@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_fraction, fmt_radical, fmt_value, sqrt_simplify
+from mathgen.formatting import fmt_fraction, fmt_radical, fmt_value, pick_template, sqrt_simplify
 
 
 def _pi_term(coef) -> str:
@@ -37,7 +37,12 @@ def gen_triangle_area(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "plane_geometry.triangle_area",
-        f"Find the area of a triangle with base {b} and height {h}.",
+        pick_template(rng,
+            f"Find the area of a triangle with base {b} and height {h}.",
+            f"Calculate the area of a triangle with base {b} and height {h}.",
+            f"What is the area of a triangle with base {b} and height {h}?",
+            f"Determine the area of a triangle whose base is {b} and height is {h}.",
+        ),
         trace,
         ans,
         {"base": b, "height": h, "difficulty": diff},
@@ -60,7 +65,12 @@ def gen_rectangle_area_perimeter(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "plane_geometry.rectangle_area_perimeter",
-        f"Find the area and perimeter of a rectangle with length {l} and width {w}.",
+        pick_template(rng,
+            f"Find the area and perimeter of a rectangle with length {l} and width {w}.",
+            f"Calculate the area and perimeter of a {l}×{w} rectangle.",
+            f"What are the area and perimeter of a rectangle with length {l} and width {w}?",
+            f"A rectangle has length {l} and width {w}. Find its area and perimeter.",
+        ),
         trace,
         ans,
         {"l": l, "w": w, "difficulty": diff},
@@ -81,7 +91,12 @@ def gen_circle_area_circumference(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "plane_geometry.circle_area_circumference",
-        f"Find the area and circumference of a circle with radius {r} (in terms of π).",
+        pick_template(rng,
+            f"Find the area and circumference of a circle with radius {r} (in terms of π).",
+            f"Calculate the area and circumference of a circle of radius {r}. Give answers in terms of π.",
+            f"What are the area and circumference of a circle with radius {r}? Express in terms of π.",
+            f"A circle has radius {r}. Find its area and circumference in terms of π.",
+        ),
         trace,
         ans,
         {"r": r, "difficulty": diff},
@@ -105,7 +120,12 @@ def gen_pythagorean_theorem(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "plane_geometry.pythagorean_theorem",
-        f"A right triangle has legs {a} and {b}. Find the hypotenuse.",
+        pick_template(rng,
+            f"A right triangle has legs {a} and {b}. Find the hypotenuse.",
+            f"In a right triangle, the legs are {a} and {b}. Calculate the hypotenuse.",
+            f"Find the hypotenuse of a right triangle with legs {a} and {b}.",
+            f"What is the length of the hypotenuse of a right triangle whose legs measure {a} and {b}?",
+        ),
         trace,
         ans,
         {"a": a, "b": b, "difficulty": diff},
@@ -131,7 +151,12 @@ def gen_similar_triangles(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "plane_geometry.similar_triangles",
-        f"Two triangles are similar. Sides {a} and {b} correspond to {a2} and x. Find x.",
+        pick_template(rng,
+            f"Two triangles are similar. Sides {a} and {b} correspond to {a2} and x. Find x.",
+            f"In two similar triangles, side {a} corresponds to {a2}, and side {b} corresponds to x. Find x.",
+            f"Given similar triangles where {a}:{b} = {a2}:x, solve for x.",
+            f"Two similar triangles have corresponding sides {a}→{a2} and {b}→x. Determine x.",
+        ),
         trace,
         f"x={ans}",
         {"a": a, "b": b, "a2": a2, "difficulty": diff},
@@ -154,7 +179,12 @@ def gen_angle_sum_triangle(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "plane_geometry.angle_sum_triangle",
-        f"Two angles of a triangle are {a}° and {b}°. Find the third angle.",
+        pick_template(rng,
+            f"Two angles of a triangle are {a}° and {b}°. Find the third angle.",
+            f"A triangle has angles of {a}° and {b}°. What is the third angle?",
+            f"Given a triangle with angles {a}° and {b}°, determine the remaining angle.",
+            f"Two angles in a triangle measure {a}° and {b}°. Calculate the third angle.",
+        ),
         trace,
         ans,
         {"a": a, "b": b, "difficulty": diff},
@@ -174,7 +204,12 @@ def gen_polygon_angle_sum(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "plane_geometry.polygon_angle_sum",
-        f"Find the sum of the interior angles of a {n}-sided polygon.",
+        pick_template(rng,
+            f"Find the sum of the interior angles of a {n}-sided polygon.",
+            f"Calculate the sum of interior angles of a polygon with {n} sides.",
+            f"What is the sum of the interior angles of a {n}-gon?",
+            f"A polygon has {n} sides. Determine the sum of its interior angles.",
+        ),
         trace,
         ans,
         {"n": n, "difficulty": diff},
@@ -198,7 +233,12 @@ def gen_sector_area_arc_length(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "plane_geometry.sector_area_arc_length",
-        f"A sector has radius {r} and central angle {theta}°. Find its arc length and area (in terms of π).",
+        pick_template(rng,
+            f"A sector has radius {r} and central angle {theta}°. Find its arc length and area (in terms of π).",
+            f"Calculate the arc length and area of a sector with radius {r} and angle {theta}°. Express in terms of π.",
+            f"Find the arc length and sector area for radius {r} and central angle {theta}°, in terms of π.",
+            f"A circle sector has radius {r} and angle {theta}°. What are its arc length and area? Use π.",
+        ),
         trace,
         ans,
         {"r": r, "theta": theta, "difficulty": diff},

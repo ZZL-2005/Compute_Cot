@@ -73,13 +73,24 @@ def gen_polynomial_division(rng: random.Random, cfg: GenConfig) -> Sample:
     q_str = _poly_text(q)
     r_int = int(r)
     ans = f"quotient {q_str}, remainder {r_int}"
-    trace = [
-        TraceStep(op="state_method", text=f"Divide {_poly_text(f)} by {fmt_factor(-c)} using polynomial (synthetic) division."),
-        TraceStep(op="quotient", text=f"The quotient is {q_str}."),
-        TraceStep(op="remainder", text=f"The remainder is {r_int}."),
-        TraceStep(op="check", text=f"Check: ({fmt_factor(-c)})({q_str}) + ({r_int}) reproduces {_poly_text(f)}."),
-        TraceStep(op="finish", text=f"So the result is {ans}.", after=ans),
-    ]
+
+    # Show synthetic division steps, not just the result.
+    coeff_list = [int(f.coeff(X, i)) for i in range(deg, -1, -1)]
+    trace = [TraceStep(op="synthetic_setup", text=f"Use synthetic division with c={c}. Write the coefficients of {_poly_text(f)}: {coeff_list}.")]
+    # Bring down first coefficient
+    row = [coeff_list[0]]
+    trace.append(TraceStep(op="bring_down", text=f"Bring down the first coefficient: {row[0]}."))
+    for i in range(1, len(coeff_list)):
+        prod = row[-1] * c
+        new_val = coeff_list[i] + prod
+        row.append(new_val)
+        if i < len(coeff_list) - 1:
+            trace.append(TraceStep(op="synthetic_step", text=f"Multiply {row[-2]}×({c}) = {prod}, add to {coeff_list[i]}: {coeff_list[i]} + ({prod}) = {new_val}."))
+        else:
+            trace.append(TraceStep(op="synthetic_remainder", text=f"Multiply {row[-2]}×({c}) = {prod}, add to {coeff_list[i]}: {coeff_list[i]} + ({prod}) = {new_val}. This is the remainder."))
+    trace.append(TraceStep(op="write_result", text=f"The quotient coefficients are {row[:-1]}, so the quotient is {q_str}, with remainder {r_int}."))
+    trace.append(TraceStep(op="check", text=f"Verify: ({fmt_factor(-c)})({q_str}) + ({r_int}) = {_poly_text(f)}."))
+    trace.append(TraceStep(op="finish", text=f"So the result is {ans}.", after=ans))
     return make_sample(
         "polynomial.polynomial_division",
         f"Divide {_poly_text(f)} by {fmt_factor(-c)}.",

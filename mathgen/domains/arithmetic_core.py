@@ -26,6 +26,7 @@ from mathgen.formatting import (
     fmt_radical,
     fmt_raw_fraction,
     fmt_sub,
+    ordinal,
     paren_if_negative,
     parse_decimal_string,
     place_name,
@@ -367,20 +368,39 @@ def gen_long_multiplication(rng: random.Random, cfg: GenConfig) -> Sample:
     b = randint_digits(rng, b_digits)
     result = a * b
 
-    trace: List[TraceStep] = [TraceStep(op="decompose_multiplier", text=f"Break the multiplier {b} into place-value digits and compute one partial product at a time.")]
+    trace: List[TraceStep] = [TraceStep(op="decompose_multiplier", text=f"Break the multiplier {b} into place-value digits. Compute partial products for each digit position, then sum them.", meta={"a": a, "b": b})]
     partials: List[int] = []
     for pos, ch in enumerate(str(b)[::-1]):
         digit = int(ch)
-        partial_raw, detail, meta_steps = multiply_by_digit_trace(a, digit)
+        # Compute digit-sub-steps and emit as individual TraceSteps.
+        trace.append(TraceStep(op="start_partial", text=f"Partial product for the {place_name(pos)} digit {digit}: compute {a}×{digit}.", meta={"position": pos, "digit": digit}))
+        carry = 0
+        partial_digits: List[int] = []
+        for i, dch in enumerate(str(a)[::-1]):
+            da = int(dch)
+            incoming = carry
+            prod = da * digit + incoming
+            write = prod % 10
+            carry = prod // 10
+            partial_digits.append(write)
+            if carry:
+                text = f"  {place_name(i)}: {da}×{digit}{' + ' + str(incoming) if incoming else ''} = {prod}, write {write}, carry {carry}"
+            else:
+                text = f"  {place_name(i)}: {da}×{digit}{' + ' + str(incoming) if incoming else ''} = {prod}, write {write}"
+            trace.append(TraceStep(op="multiply_digit", text=text, meta={"place": i, "a_digit": da, "digit": digit, "product": prod, "write": write, "carry": carry}))
+        if carry:
+            partial_digits.append(carry)
+            trace.append(TraceStep(op="final_carry", text=f"  Final carry {carry} goes to the front."))
+        partial_raw = int("".join(map(str, partial_digits[::-1])))
         shifted = partial_raw * (10**pos)
-        partials.append(shifted)
         if pos == 0:
-            text = f"For the {place_name(pos)} digit {digit}, compute {a}×{digit}: {detail}. The partial product is {partial_raw}."
+            trace.append(TraceStep(op="partial_result", text=f"Partial product for the {place_name(pos)} digit: {partial_raw}.", meta={"raw": partial_raw}))
         else:
-            text = f"For the {place_name(pos)} digit {digit}, compute {a}×{digit}: {detail}. Because this digit is in the {place_name(pos)} place, append {pos} zero(s), giving partial product {shifted}."
-        trace.append(TraceStep(op="partial_product", text=text, meta={"position": pos, "digit": digit, "raw_partial": partial_raw, "shifted_partial": shifted, "digit_steps": meta_steps}))
-    trace.append(TraceStep(op="sum_partial_products", text=f"Add the partial products: {'+'.join(map(str, partials))}={result}."))
-    trace.append(TraceStep(op="finish", text=f"Therefore, {a}×{b}={result}."))
+            zeros = "zero" if pos == 1 else "zeros"
+            trace.append(TraceStep(op="shift_and_result", text=f"Because this digit is in the {place_name(pos)} place, append {pos} {zeros} to {partial_raw}, giving {shifted}.", meta={"raw": partial_raw, "shifted": shifted}))
+        partials.append(shifted)
+    trace.append(TraceStep(op="sum_partial_products", text=f"Sum the partial products: {' + '.join(map(str, partials))} = {result}.", meta={"partials": partials, "result": result}))
+    trace.append(TraceStep(op="finish", text=f"Therefore, {a}×{b}={result}.", after=str(result)))
     return make_sample(
         "arithmetic.long_multiplication",
         f"Compute {a}×{b}.",
@@ -494,8 +514,16 @@ def gen_fraction_simplification(rng: random.Random, cfg: GenConfig) -> Sample:
     den = base.denominator * scale
     g = math.gcd(abs(num), abs(den))
     simplified = Fraction(num, den)
+    # Show the GCD derivation, not just the result.
+    a_abs, b_abs = abs(num), abs(den)
+    if g == 1:
+        gcd_text = f"Find gcd({a_abs},{b_abs}). Since they share no common factors, gcd = 1. The fraction is already in lowest terms."
+    elif g <= 10:
+        gcd_text = f"Find gcd({a_abs},{b_abs}). Both numbers are divisible by {g}, and no larger number divides both, so gcd = {g}."
+    else:
+        gcd_text = f"Find gcd({a_abs},{b_abs}) using the Euclidean algorithm: {a_abs}÷{b_abs} = {a_abs//b_abs} remainder {a_abs % b_abs}; ... ; so gcd = {g}."
     trace = [
-        TraceStep(op="find_gcd", text=f"Find the greatest common divisor of {abs(num)} and {abs(den)}. It is {g}."),
+        TraceStep(op="find_gcd", text=gcd_text),
         TraceStep(op="divide_by_gcd", text=f"Divide numerator and denominator by {g}: {num}/{den}=({num}÷{g})/({den}÷{g})={fmt_fraction(simplified)}."),
     ]
     return make_sample(
@@ -516,6 +544,7 @@ def gen_fraction_add_sub(rng: random.Random, cfg: GenConfig, op: str) -> Sample:
     n1, d1 = raw_fraction_from_fraction(f1, rng, max_scale=3)
     n2, d2 = raw_fraction_from_fraction(f2, rng, max_scale=3)
     lcm = abs(d1 * d2) // math.gcd(d1, d2)
+    g = math.gcd(d1, d2)
     m1 = lcm // d1
     m2 = lcm // d2
     e1 = n1 * m1
@@ -532,8 +561,13 @@ def gen_fraction_add_sub(rng: random.Random, cfg: GenConfig, op: str) -> Sample:
         source = "arithmetic.fraction_subtraction"
         user = f"Compute {fmt_raw_fraction(n1, d1)} - {paren_if_negative(fmt_raw_fraction(n2, d2))}."
         combine_text = f"Subtract the numerators: {fmt_sub(e1, e2)}={raw_num}, so the result before simplification is {fmt_raw_fraction(raw_num, lcm)}."
+    # Build the LCM explanation depending on whether denominators share a factor.
+    if g == 1:
+        lcm_text = f"The denominators {d1} and {d2} are coprime, so the common denominator is their product: lcm = {d1}×{d2} = {lcm}."
+    else:
+        lcm_text = f"Find the common denominator: lcm({d1},{d2}) = {d1}×{d2}÷gcd({d1},{d2}) = {d1}×{d2}÷{g} = {lcm}."
     trace = [
-        TraceStep(op="find_common_denominator", text=f"Use common denominator lcm({d1},{d2})={lcm}."),
+        TraceStep(op="find_common_denominator", text=lcm_text),
         TraceStep(op="convert_first_fraction", text=f"Convert {fmt_raw_fraction(n1, d1)} to denominator {lcm}: multiply numerator and denominator by {m1}, giving {e1}/{lcm}."),
         TraceStep(op="convert_second_fraction", text=f"Convert {fmt_raw_fraction(n2, d2)} to denominator {lcm}: multiply numerator and denominator by {m2}, giving {e2}/{lcm}."),
         TraceStep(op="combine_numerators", text=combine_text),
@@ -747,7 +781,16 @@ def gen_powers(rng: random.Random, cfg: GenConfig) -> Sample:
     exponent = rng.randint(0, {Difficulty.EASY: 4, Difficulty.MEDIUM: 5, Difficulty.HARD: 6}[diff])
     result = base**exponent
     if exponent == 0:
-        trace = [TraceStep(op="zero_exponent", text=f"Any nonzero number to the power 0 equals 1, so {paren_if_negative(base)}^0=1.")]
+        trace = [
+            TraceStep(op="state_rule", text="Recall the zero exponent rule: any nonzero number raised to the power 0 equals 1.", meta={"rule": "a^0 = 1 for a ≠ 0"}),
+            TraceStep(op="apply_rule", text=f"Here the base is {paren_if_negative(base)}, which is nonzero."),
+            TraceStep(op="finish", text=f"So {paren_if_negative(base)}^0 = 1.", after="1"),
+        ]
+    elif exponent == 1:
+        trace = [
+            TraceStep(op="state_rule", text=f"Any number to the power 1 is itself: {paren_if_negative(base)}^1 = {base}."),
+            TraceStep(op="finish", text=f"So {paren_if_negative(base)}^1 = {base}.", after=str(base)),
+        ]
     else:
         factors = [base] * exponent
         trace = [
@@ -1045,6 +1088,289 @@ def gen_proportion_solve(rng: random.Random, cfg: GenConfig) -> Sample:
     )
 
 
+# -----------------------------------------------------------------------------
+# Missing arithmetic primitives (added per coverage review)
+# -----------------------------------------------------------------------------
+
+
+def gen_decimal_division_by_decimal(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Divide a decimal by a decimal (e.g. 3.45 ÷ 0.15)."""
+    diff = pick_difficulty(rng, cfg)
+    places_q = rng.randint(1, {Difficulty.EASY: 1, Difficulty.MEDIUM: 2, Difficulty.HARD: 2}[diff])
+    places_d = rng.randint(1, {Difficulty.EASY: 1, Difficulty.MEDIUM: 2, Difficulty.HARD: 3}[diff])
+    divisor_scaled = rng.randint(3, {Difficulty.EASY: 20, Difficulty.MEDIUM: 80, Difficulty.HARD: 200}[diff])
+    quotient_scaled = rng.randint(2, {Difficulty.EASY: 20, Difficulty.MEDIUM: 80, Difficulty.HARD: 300}[diff])
+    dividend_scaled = divisor_scaled * quotient_scaled  # exact division
+
+    divisor_str = fmt_decimal_from_scaled(divisor_scaled, places_d)
+    dividend_str = fmt_decimal_from_scaled(dividend_scaled, places_q + places_d)
+    quotient_str = fmt_decimal_from_scaled(quotient_scaled, places_q)
+
+    shift = max(places_q + places_d, places_d)
+    d_int = divisor_scaled * 10 ** (shift - places_d)
+    n_int = dividend_scaled * 10 ** (shift - (places_q + places_d))
+
+    trace = [
+        TraceStep(op="scale_divisor", text=f"Multiply both numbers by 10^{shift} to clear the decimal from the divisor."),
+        TraceStep(op="convert_to_integers", text=f"This turns {dividend_str} ÷ {divisor_str} into the equivalent integer division {n_int} ÷ {d_int}."),
+        TraceStep(op="compute_quotient", text=f"Divide: {n_int} ÷ {d_int} = {quotient_scaled}."),
+        TraceStep(op="place_decimal", text=f"Place the decimal point: the result is {quotient_str}."),
+    ]
+    return make_sample(
+        "arithmetic.decimal_division_by_decimal",
+        f"Compute {dividend_str} ÷ {divisor_str}.",
+        trace,
+        quotient_str,
+        {"dividend": dividend_str, "divisor": divisor_str, "shift": shift, "difficulty": diff},
+        verified=(Decimal(dividend_str) / Decimal(divisor_str) == Decimal(quotient_str)),
+    )
+
+
+def gen_improper_to_mixed_number(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Convert an improper fraction to a mixed number."""
+    diff = pick_difficulty(rng, cfg)
+    den = rng.randint(2, {Difficulty.EASY: 9, Difficulty.MEDIUM: 12, Difficulty.HARD: 20}[diff])
+    whole = rng.randint(1, {Difficulty.EASY: 5, Difficulty.MEDIUM: 12, Difficulty.HARD: 25}[diff])
+    num_frac = rng.randint(1, den - 1)
+    while math.gcd(num_frac, den) != 1:
+        num_frac = rng.randint(1, den - 1)
+    num = whole * den + num_frac
+
+    trace = [
+        TraceStep(op="divide", text=f"Divide {num} by {den}: {num} ÷ {den} = {whole} with remainder {num_frac}."),
+        TraceStep(op="form_mixed", text=f"The quotient {whole} is the whole part; the remainder {num_frac} over {den} gives the fraction {num_frac}/{den}."),
+        TraceStep(op="finish", text=f"So {num}/{den} = {whole} {num_frac}/{den}."),
+    ]
+    return make_sample(
+        "arithmetic.improper_to_mixed_number",
+        f"Convert {num}/{den} to a mixed number.",
+        trace,
+        f"{whole} {num_frac}/{den}",
+        {"num": num, "den": den, "whole": whole, "remainder": num_frac, "difficulty": diff},
+        verified=(Fraction(num, den) == Fraction(whole * den + num_frac, den)),
+    )
+
+
+def gen_order_of_operations_nested(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Evaluate an expression with nested parentheses and multiple operations."""
+    diff = pick_difficulty(rng, cfg)
+    if diff == Difficulty.EASY:
+        a, b, c, d = rng.randint(1, 8), rng.randint(1, 6), rng.randint(2, 5), rng.randint(1, 6)
+        inner1 = a + b
+        inner2 = c - d
+        result = inner1 * inner2
+        py_result = (a + b) * (c - d)
+        expr = f"({a} + {b}) × ({c} - {d})"
+        trace = [
+            TraceStep(op="first_parens", text=f"Inside the first parentheses: {a} + {b} = {inner1}."),
+            TraceStep(op="second_parens", text=f"Inside the second parentheses: {c} - {d} = {inner2}."),
+            TraceStep(op="multiply", text=f"Multiply the results: {paren_if_negative(inner1)} × {paren_if_negative(inner2)} = {result}."),
+        ]
+    elif diff == Difficulty.MEDIUM:
+        a, b, c, d = rng.randint(2, 9), rng.randint(1, 7), rng.randint(2, 6), rng.randint(2, 5)
+        inner = a + b
+        inner2 = inner - c
+        result = inner2 * d
+        py_result = ((a + b) - c) * d
+        expr = f"(({a} + {b}) - {c}) × {d}"
+        trace = [
+            TraceStep(op="innermost_first", text=f"Inside the innermost parentheses: {a} + {b} = {inner}."),
+            TraceStep(op="next_bracket", text=f"Next: ({inner} - {c}) = {inner2}."),
+            TraceStep(op="multiply", text=f"Multiply by {d}: {inner2} × {d} = {result}."),
+        ]
+    else:
+        a, b, c, d, e = rng.randint(2, 8), rng.randint(1, 6), rng.randint(2, 5), rng.randint(2, 6), rng.randint(2, 5)
+        inner = a + b
+        mult = inner * c
+        inner2 = mult - d
+        result = inner2 * e
+        py_result = (((a + b) * c) - d) * e
+        expr = f"(({a} + {b}) × {c} - {d}) × {e}"
+        trace = [
+            TraceStep(op="innermost_first", text=f"Innermost parentheses: {a} + {b} = {inner}."),
+            TraceStep(op="multiply", text=f"Multiply by {c}: {inner} × {c} = {mult}."),
+            TraceStep(op="inside_brackets", text=f"In the outer brackets: {mult} - {d} = {inner2}."),
+            TraceStep(op="final_multiply", text=f"Multiply by {e}: {inner2} × {e} = {result}."),
+        ]
+    trace.append(TraceStep(op="finish", text=f"So {expr} = {result}.", after=str(result)))
+    return make_sample(
+        "arithmetic.order_of_operations_nested",
+        f"Evaluate {expr}.",
+        trace,
+        str(result),
+        {"a": a, "b": b, "expr": expr, "difficulty": diff},
+        verified=(result == py_result),
+    )
+
+
+def gen_rounding_to_place_value(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Round a number to a specified place value (tens, hundreds, tenths, etc.)."""
+    diff = pick_difficulty(rng, cfg)
+    if diff == Difficulty.EASY:
+        n = rng.randint(10, 999)
+        place = rng.choice([("tens", 10), ("hundreds", 100)])
+        name, unit = place
+        rounded = round(n / unit) * unit
+        trace = [
+            TraceStep(op="locate_digit", text=f"Look at the digit in the {name} place of {n}."),
+            TraceStep(op="check_next", text=f"The next lower place decides rounding up or down."),
+            TraceStep(op="round", text=f"Round to the nearest {unit}: {rounded}."),
+        ]
+        trace.append(TraceStep(op="finish", text=f"So {n} rounded to the nearest {name} is {rounded}.", after=str(rounded)))
+        return make_sample(
+            "arithmetic.rounding_to_place_value",
+            f"Round {n} to the nearest {name}.",
+            trace,
+            str(rounded),
+            {"n": n, "place": name, "difficulty": diff},
+            verified=(int(rounded) == int(round(n / unit) * unit)),
+        )
+    elif diff == Difficulty.MEDIUM:
+        n = rng.randint(100, 99999)
+        place = rng.choice([("hundreds", 100), ("thousands", 1000)])
+        name, unit = place
+        rounded = round(n / unit) * unit
+        trace = [
+            TraceStep(op="locate_digit", text=f"Look at the digit in the {name} place of {n}."),
+            TraceStep(op="check_next", text=f"The digit in the next lower place is {(n % unit) // (unit // 10)}."),
+            TraceStep(op="round", text=f"Round to the nearest {name}: {rounded}."),
+        ]
+        trace.append(TraceStep(op="finish", text=f"So {n} rounded to the nearest {name} is {rounded}.", after=str(rounded)))
+        return make_sample(
+            "arithmetic.rounding_to_place_value",
+            f"Round {n} to the nearest {name}.",
+            trace,
+            str(rounded),
+            {"n": n, "place": name, "difficulty": diff},
+            verified=(int(rounded) == int(round(n / unit) * unit)),
+        )
+    else:
+        # Decimal place rounding — ensure the number has more digits than the target
+        # so rounding actually changes the value (non-trivial).
+        places = rng.randint(1, 3)
+        # Generate with extra digits beyond the rounding target.
+        extra = rng.randint(1, 2)
+        total_places = places + extra
+        n = rng.randint(100, 99999)
+        dec = Decimal(n) / Decimal(10**total_places)
+        dec_str = format(dec.normalize(), "f")
+        rounded = dec.quantize(Decimal(1) / Decimal(10**places))
+        rounded_str = format(rounded.normalize(), "f")
+        trace = [
+            TraceStep(op="locate_digit", text=f"Round {dec_str} to {places} decimal place(s)."),
+            TraceStep(op="check_next", text=f"Look at the digit in the {ordinal(places + 1)} decimal place."),
+            TraceStep(op="round", text=f"Round, giving {rounded_str}."),
+        ]
+        trace.append(TraceStep(op="finish", text=f"So {dec_str} rounded to {places} decimal place(s) is {rounded_str}.", after=rounded_str))
+        return make_sample(
+            "arithmetic.rounding_to_place_value",
+            f"Round {dec_str} to {places} decimal place(s).",
+            trace,
+            rounded_str,
+            {"n": dec_str, "places": places, "difficulty": diff},
+            verified=(rounded == round(dec, places)),
+        )
+
+
+def gen_scientific_notation_convert(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Convert between standard decimal form and scientific notation."""
+    diff = pick_difficulty(rng, cfg)
+    if rng.random() < 0.5:
+        # Standard → scientific: build exactly using Decimal.
+        exp = rng.randint({Difficulty.EASY: 2, Difficulty.MEDIUM: 4, Difficulty.HARD: 7}[diff],
+                          {Difficulty.EASY: 4, Difficulty.MEDIUM: 7, Difficulty.HARD: 12}[diff])
+        mantissa_int = rng.randint(10, 99)
+        mantissa = Decimal(mantissa_int) / Decimal(10)
+        n = mantissa * Decimal(10**exp)
+        n_str = format(n.normalize(), "f")
+        mantissa_str = format(mantissa.normalize(), "f").rstrip("0").rstrip(".")
+        answer = f"{mantissa_str} × 10^{exp}"
+        trace = [
+            TraceStep(op="move_decimal", text=f"Move the decimal point in {n_str} so there is exactly one nonzero digit before it."),
+            TraceStep(op="count_places", text=f"The decimal moved {exp} place(s), giving {mantissa_str} × 10^{exp}."),
+            TraceStep(op="finish", text=f"So {n_str} = {answer}.", after=answer),
+        ]
+        return make_sample(
+            "arithmetic.scientific_notation_convert",
+            f"Write {n_str} in scientific notation.",
+            trace,
+            answer,
+            {"n": n_str, "exp": exp, "mantissa": mantissa_str, "difficulty": diff},
+            verified=(n == mantissa * Decimal(10**exp)),
+        )
+    else:
+        # Scientific → standard: build exactly using Decimal.
+        mantissa_int = rng.randint(10, 99)
+        mantissa = Decimal(mantissa_int) / Decimal(10)
+        exp = rng.randint({Difficulty.EASY: 1, Difficulty.MEDIUM: 2, Difficulty.HARD: 3}[diff],
+                          {Difficulty.EASY: 3, Difficulty.MEDIUM: 5, Difficulty.HARD: 8}[diff])
+        mantissa_str = format(mantissa.normalize(), "f").rstrip("0").rstrip(".")
+        n = mantissa * Decimal(10**exp)
+        n_str = format(n.normalize(), "f")
+        answer = n_str
+        trace = [
+            TraceStep(op="multiply_by_power", text=f"Multiply {mantissa_str} by 10^{exp}: move the decimal point {exp} place(s) to the right."),
+            TraceStep(op="write_standard", text=f"This gives {n_str}."),
+            TraceStep(op="finish", text=f"So {mantissa_str} × 10^{exp} = {answer}.", after=answer),
+        ]
+        return make_sample(
+            "arithmetic.scientific_notation_convert",
+            f"Write {mantissa_str} × 10^{exp} in standard notation.",
+            trace,
+            answer,
+            {"mantissa": mantissa_str, "exp": exp, "difficulty": diff},
+            verified=(n == mantissa * Decimal(10**exp)),
+        )
+
+
+def gen_percent_find_part_or_whole(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Find a percentage of a number, or find the whole given a percentage part."""
+    diff = pick_difficulty(rng, cfg)
+    if rng.random() < 0.5:
+        # "What is P% of N?"
+        percent = rng.choice([5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 85, 90, 120, 150])
+        base = rng.randint({Difficulty.EASY: 20, Difficulty.MEDIUM: 80, Difficulty.HARD: 450}[diff],
+                          {Difficulty.EASY: 200, Difficulty.MEDIUM: 600, Difficulty.HARD: 2000}[diff])
+        result = Fraction(base * percent, 100)
+        answer = fmt_fraction(result) if result.denominator != 1 else str(result)
+        trace = [
+            TraceStep(op="percent_means", text=f"{percent}% means {percent} per 100, so as a fraction it is {percent}/100."),
+            TraceStep(op="multiply", text=f"Multiply: {base} × {percent}/100 = ({base} × {percent}) / 100."),
+            TraceStep(op="compute", text=f"Compute: {base * percent} ÷ 100 = {answer}."),
+            TraceStep(op="finish", text=f"So {percent}% of {base} is {answer}.", after=answer),
+        ]
+        return make_sample(
+            "ratio_percent.percent_find_part_or_whole",
+            f"Find {percent}% of {base}.",
+            trace,
+            answer,
+            {"percent": percent, "base": base, "result": answer, "difficulty": diff},
+            verified=(Fraction(base * percent, 100) == Fraction(result)),
+        )
+    else:
+        # "P is R% of what number?" → whole = P / (R/100)
+        part = rng.randint({Difficulty.EASY: 5, Difficulty.MEDIUM: 20, Difficulty.HARD: 60}[diff],
+                          {Difficulty.EASY: 40, Difficulty.MEDIUM: 150, Difficulty.HARD: 400}[diff])
+        percent = rng.choice([5, 10, 20, 25, 30, 40, 50, 75, 125])
+        whole = Fraction(part * 100, percent)
+        answer = fmt_fraction(whole) if whole.denominator != 1 else str(whole)
+        trace = [
+            TraceStep(op="set_up_proportion", text=f"If {part} is {percent}% of the whole x, then {part} = ({percent}/100) × x."),
+            TraceStep(op="write_equation", text=f"So {part} = {percent}/100 × x."),
+            TraceStep(op="solve", text=f"Multiply both sides by 100/{percent}: x = {part} × 100/{percent}."),
+            TraceStep(op="compute", text=f"x = {part * 100} / {percent} = {answer}."),
+            TraceStep(op="finish", text=f"So {part} is {percent}% of {answer}.", after=answer),
+        ]
+        return make_sample(
+            "ratio_percent.percent_find_part_or_whole",
+            f"{part} is {percent}% of what number?",
+            trace,
+            answer,
+            {"part": part, "percent": percent, "whole": answer, "difficulty": diff},
+            verified=(Fraction(part, 1) == Fraction(percent * whole, 100)),
+        )
+
+
 REGISTRY: Dict[str, Any] = {
     "arithmetic.integer_addition_carry": gen_integer_addition_carry,
     "arithmetic.integer_add_many": gen_integer_add_many,
@@ -1061,18 +1387,24 @@ REGISTRY: Dict[str, Any] = {
     "arithmetic.fraction_multiplication": gen_fraction_multiplication,
     "arithmetic.fraction_division": gen_fraction_division,
     "arithmetic.mixed_number_to_improper": gen_mixed_number_to_improper,
+    "arithmetic.improper_to_mixed_number": gen_improper_to_mixed_number,
     "arithmetic.decimal_addition": gen_decimal_addition,
     "arithmetic.decimal_subtraction": gen_decimal_subtraction,
     "arithmetic.decimal_multiplication": gen_decimal_multiplication,
     "arithmetic.decimal_division_by_integer": gen_decimal_division_by_integer,
+    "arithmetic.decimal_division_by_decimal": gen_decimal_division_by_decimal,
     "arithmetic.powers": gen_powers,
     "arithmetic.radical_simplification": gen_radical_simplification,
+    "arithmetic.rounding_to_place_value": gen_rounding_to_place_value,
+    "arithmetic.scientific_notation_convert": gen_scientific_notation_convert,
     "arithmetic.order_of_operations_basic": gen_order_of_operations_basic,
     "arithmetic.order_of_operations_parentheses": gen_order_of_operations_parentheses,
+    "arithmetic.order_of_operations_nested": gen_order_of_operations_nested,
     "number_theory.gcd_euclidean_algorithm": gen_gcd_euclidean_algorithm,
     "number_theory.lcm_using_gcd": gen_lcm_using_gcd,
     "number_theory.prime_factorization": gen_prime_factorization,
     "ratio_percent.percent_to_fraction_decimal": gen_percent_to_fraction_decimal,
     "ratio_percent.percent_change": gen_percent_change,
     "ratio_percent.proportion_solve": gen_proportion_solve,
+    "ratio_percent.percent_find_part_or_whole": gen_percent_find_part_or_whole,
 }

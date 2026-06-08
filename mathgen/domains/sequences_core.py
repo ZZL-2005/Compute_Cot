@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_add, fmt_fraction, fmt_mul, paren_if_negative
+from mathgen.formatting import fmt_add, fmt_fraction, fmt_mul, fmt_signed_term, ordinal, paren_if_negative, pick_template
 
 
 def _nonzero(rng: random.Random, lo: int, hi: int) -> int:
@@ -44,7 +44,7 @@ def gen_arithmetic_nth_term(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "sequence.arithmetic_nth_term",
-        f"In an arithmetic sequence the first term is {a1} and the common difference is {d}. Find the {n}th term.",
+        f"In an arithmetic sequence the first term is {a1} and the common difference is {d}. Find the {ordinal(n)} term.",
         trace,
         str(result),
         {"a1": a1, "d": d, "n": n, "difficulty": diff},
@@ -76,7 +76,7 @@ def gen_arithmetic_series_sum(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "sequence.arithmetic_series_sum",
-        f"Find the sum of the first {n} terms of the arithmetic sequence with first term {a1} and common difference {d}.",
+        pick_template(rng, f"Find the sum of the first {n} terms of the arithmetic sequence with a_1={a1} and d={d}.", f"Calculate S_{n} for the arithmetic sequence with first term {a1}, common difference {d}.", f"An arithmetic sequence has a_1={a1}, d={d}. Find the sum of the first {n} terms."),
         trace,
         str(result),
         {"a1": a1, "d": d, "n": n, "difficulty": diff},
@@ -105,7 +105,7 @@ def gen_geometric_nth_term(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "sequence.geometric_nth_term",
-        f"In a geometric sequence the first term is {a1} and the common ratio is {r}. Find the {n}th term.",
+        f"In a geometric sequence the first term is {a1} and the common ratio is {r}. Find the {ordinal(n)} term.",
         trace,
         str(result),
         {"a1": a1, "r": r, "n": n, "difficulty": diff},
@@ -134,7 +134,7 @@ def gen_geometric_series_sum(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "sequence.geometric_series_sum",
-        f"Find the sum of the first {n} terms of the geometric sequence with first term {a1} and common ratio {r}.",
+        pick_template(rng, f"Find the sum of the first {n} terms of the geometric sequence with a_1={a1} and r={r}.", f"Calculate S_{n} for the geometric sequence with first term {a1}, common ratio {r}.", f"A geometric sequence has a_1={a1}, r={r}. Find the sum of the first {n} terms."),
         trace,
         str(result),
         {"a1": a1, "r": r, "n": n, "difficulty": diff},
@@ -149,9 +149,12 @@ def gen_recurrence_basic(rng: random.Random, cfg: GenConfig) -> Sample:
     q = _nonzero(rng, -6, 6)
     k = rng.randint(4, {Difficulty.EASY: 4, Difficulty.MEDIUM: 5, Difficulty.HARD: 6}[diff])
 
+    # Avoid "+ (-5)" pattern per des_instruct.md sec 5.
+    q_sign = fmt_signed_term(q, '', first=False)
+
     terms = [a1]
     trace = [
-        TraceStep(op="state_rule", text=f"The recurrence is a_(n+1) = {p}·a_n + ({q}), with a_1 = {a1}."),
+        TraceStep(op="state_rule", text=f"The recurrence is a_(n+1) = {p}·a_n{q_sign}, with a_1 = {a1}."),
         TraceStep(op="first_term", text=f"a_1 = {a1}."),
     ]
     for idx in range(1, k):
@@ -160,7 +163,7 @@ def gen_recurrence_basic(rng: random.Random, cfg: GenConfig) -> Sample:
         nxt = pa + q
         trace.append(TraceStep(
             op="next_term",
-            text=f"a_{idx+1} = {p}×{paren_if_negative(prev)} + ({q}) = {pa} + ({q}) = {nxt}.",
+            text=f"a_{idx+1} = {p}×{paren_if_negative(prev)}{q_sign} = {pa}{q_sign} = {nxt}.",
             meta={"index": idx + 1, "value": nxt},
         ))
         terms.append(nxt)
@@ -168,7 +171,7 @@ def gen_recurrence_basic(rng: random.Random, cfg: GenConfig) -> Sample:
     trace.append(TraceStep(op="finish", text=f"So a_{k} = {result}.", after=str(result)))
     return make_sample(
         "sequence.recurrence_basic",
-        f"A sequence satisfies a_1 = {a1} and a_(n+1) = {p}·a_n + ({q}). Find a_{k}.",
+        f"A sequence satisfies a_1 = {a1} and a_(n+1) = {p}·a_n{q_sign}. Find a_{k}.",
         trace,
         str(result),
         {"a1": a1, "p": p, "q": q, "k": k, "difficulty": diff},
@@ -186,8 +189,11 @@ def gen_sigma_notation(rng: random.Random, cfg: GenConfig) -> Sample:
     bn = b * n
     result = a_tri + bn
 
+    # Avoid "+ (-5)" pattern per des_instruct.md sec 5.
+    b_sign = fmt_signed_term(b, '', first=False)
+
     trace = [
-        TraceStep(op="split_sum", text=f"Split the sum: sum_(i=1)^{n} ({a}i + ({b})) = {a}·sum_(i=1)^{n} i + sum_(i=1)^{n} ({b})."),
+        TraceStep(op="split_sum", text=f"Split the sum: sum_(i=1)^{n} ({a}i{b_sign}) = {a}·sum_(i=1)^{n} i + sum_(i=1)^{n} ({b})."),
         TraceStep(op="sum_of_i", text=f"Use sum_(i=1)^{n} i = n(n+1)/2 = {n}×{n+1}/2 = {tri}."),
         TraceStep(op="scale_first", text=f"Multiply by {a}: {a}×{tri} = {a_tri}."),
         TraceStep(op="sum_constant", text=f"The constant term adds {n} times: {b}×{n} = {bn}."),
@@ -196,7 +202,7 @@ def gen_sigma_notation(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "sequence.sigma_notation",
-        f"Evaluate sum_(i=1)^{n} ({a}i + ({b})).",
+        f"Evaluate sum_(i=1)^{n} ({a}i{b_sign}).",
         trace,
         str(result),
         {"a": a, "b": b, "n": n, "difficulty": diff},

@@ -6,6 +6,7 @@ and exponent rules. Each rewrite is verified for symbolic equivalence with sympy
 
 from __future__ import annotations
 
+import math
 import random
 from typing import Any, Dict, List
 
@@ -152,9 +153,33 @@ def gen_factor_trinomial(rng: random.Random, cfg: GenConfig) -> Sample:
     c = p * q
     expr_str = fmt_poly([(1, 2), (b, 1), (c, 0)])
     answer = f"{fmt_factor(p)}{fmt_factor(q)}"
+
+    # Show the search strategy, not just the result.
+    search_steps = []
+    abs_c = abs(c)
+    # List a few factor pairs of |c| to illustrate the search.
+    pairs = []
+    for d in range(1, int(abs_c**0.5) + 1):
+        if abs_c % d == 0:
+            pairs.append((d, abs_c // d))
+    sample_pairs = pairs[:3]  # show up to 3 pairs
+    if len(pairs) > 3:
+        pair_text = ", ".join(f"({a},{b})" for a, b in sample_pairs) + ", ..."
+    else:
+        pair_text = ", ".join(f"({a},{b})" for a, b in sample_pairs)
+
+    # Determine signs: if c>0, both same sign (sign of b). If c<0, opposite signs.
+    if c > 0 and b < 0:
+        sign_hint = "Since c>0 and b<0, both numbers must be negative."
+    elif c > 0 and b > 0:
+        sign_hint = "Since c>0 and b>0, both numbers are positive."
+    else:
+        sign_hint = "Since c<0, one number is positive and the other is negative."
+
     trace = [
         TraceStep(op="set_up_factoring", text=f"Look for two numbers whose product is {c} and whose sum is {b}."),
-        TraceStep(op="find_factor_pair", text=f"The numbers {p} and {q} work because {fmt_mul(p, q)}={c} and {fmt_add(p, q)}={b}.", meta={"p": p, "q": q, "product": c, "sum": b}),
+        TraceStep(op="list_factor_pairs", text=f"Factor pairs of |{c}|: {pair_text}. {sign_hint}"),
+        TraceStep(op="find_factor_pair", text=f"Testing: {fmt_mul(p, q)}={c} ✓ and {fmt_add(p, q)}={b} ✓. The numbers are {p} and {q}.", meta={"p": p, "q": q, "product": c, "sum": b}),
         TraceStep(op="write_factors", text=f"Therefore {expr_str}={answer}.", after=answer),
     ]
     return make_sample(
@@ -181,8 +206,9 @@ def gen_exponent_product(rng: random.Random, cfg: GenConfig) -> Sample:
     expr_str = f"{left} × {right}"
     answer = f"{coef}x^{power}" if power > 1 else f"{coef}x"
     trace = [
-        TraceStep(op="multiply_coefficients", text=f"Multiply the coefficients: {a}×{b}={coef}.", meta={"a": a, "b": b, "coef": coef}),
-        TraceStep(op="add_exponents", text=f"Add the exponents of x: x^{m}×x^{n}=x^({m}+{n})=x^{power}.", meta={"m": m, "n": n, "power": power}),
+        TraceStep(op="state_rule", text="Use the product law: a·x^m × b·x^n = (a·b)·x^(m+n)."),
+        TraceStep(op="multiply_coefficients", text=f"Here a={a}, b={b}, so a·b = {coef}.", meta={"a": a, "b": b, "coef": coef}),
+        TraceStep(op="add_exponents", text=f"Here m={m}, n={n}, so x^{m}×x^{n}=x^({m}+{n})=x^{power}.", meta={"m": m, "n": n, "power": power}),
         TraceStep(op="finish", text=f"Therefore {expr_str}={answer}.", after=answer),
     ]
     return make_sample(
@@ -228,10 +254,11 @@ def gen_radical_simplify(rng: random.Random, cfg: GenConfig) -> Sample:
     a2, _ = sqrt_simplify(n2)
     total = a1 + a2
     answer = fmt_radical(total, base)
+    # Show the factorization: sqrt(N) = sqrt(k²·base) = k·sqrt(base).
     trace = [
-        TraceStep(op="simplify_first", text=f"Simplify the first radical: sqrt({n1}) = {fmt_radical(a1, base)}."),
-        TraceStep(op="simplify_second", text=f"Simplify the second radical: sqrt({n2}) = {fmt_radical(a2, base)}."),
-        TraceStep(op="combine_like", text=f"Both have sqrt({base}), so add coefficients: {a1} + {a2} = {total}."),
+        TraceStep(op="simplify_first", text=f"Simplify sqrt({n1}): factor {n1} = {a1}²×{base}, so sqrt({n1}) = sqrt({a1}²×{base}) = {a1}sqrt({base}).", meta={"n": n1, "outside": a1, "inside": base}),
+        TraceStep(op="simplify_second", text=f"Simplify sqrt({n2}): factor {n2} = {a2}²×{base}, so sqrt({n2}) = sqrt({a2}²×{base}) = {a2}sqrt({base}).", meta={"n": n2, "outside": a2, "inside": base}),
+        TraceStep(op="combine_like", text=f"Both terms now have sqrt({base}). Add their coefficients: {a1} + {a2} = {total}.", meta={"a1": a1, "a2": a2, "total": total}),
         TraceStep(op="finish", text=f"So sqrt({n1}) + sqrt({n2}) = {answer}.", after=answer),
     ]
     return make_sample(
@@ -266,6 +293,123 @@ def gen_absolute_value_simplify(rng: random.Random, cfg: GenConfig) -> Sample:
     )
 
 
+# -----------------------------------------------------------------------------
+# Missing expression rewrite generators (added per coverage review)
+# -----------------------------------------------------------------------------
+
+
+def gen_factor_trinomial_a_not_1(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Factor ax²+bx+c where a≠1 (leading coefficient not 1)."""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 4, Difficulty.MEDIUM: 7, Difficulty.HARD: 10}[diff]
+    # Build from factors: (px + q)(rx + s) = pr·x² + (ps + qr)x + qs
+    p = _nonzero(rng, 2, hi)
+    q = _nonzero(rng, -hi, hi)
+    r = _nonzero(rng, 2, hi)
+    s = _nonzero(rng, -hi, hi)
+    # Ensure gcd(p,q)=1 and gcd(r,s)=1 for canonical factors
+    while abs(math.gcd(p, abs(q))) != 1 and p > 0:
+        q = _nonzero(rng, -hi, hi)
+    while abs(math.gcd(r, abs(s))) != 1 and r > 0:
+        s = _nonzero(rng, -hi, hi)
+
+    a = p * r
+    b_coef = p * s + q * r
+    c_coef = q * s
+
+    expr_str = fmt_poly([(a, 2), (b_coef, 1), (c_coef, 0)])
+    factor1 = f"({fmt_linear(p, q)})" if p != 1 else f"({fmt_linear(1, q)})"
+    factor2 = f"({fmt_linear(r, s)})" if r != 1 else f"({fmt_linear(1, s)})"
+    answer = f"{factor1}{factor2}"
+
+    trace = [
+        TraceStep(op="set_up_factoring", text=f"Factor {expr_str}. Look for two binomials whose product gives a={a}, c={c_coef}, and cross-terms sum to b={b_coef}."),
+        TraceStep(op="find_ac_pairs", text=f"The coefficient of x² is {a}={fmt_mul(p, r)} and the constant is {c_coef}={fmt_mul(q, s)}."),
+        TraceStep(op="check_cross_terms", text=f"Check the cross terms: {fmt_mul(p, s)} + {fmt_mul(q, r)} = {fmt_add(p * s, q * r)} = {b_coef}. This matches."),
+        TraceStep(op="write_factors", text=f"So {expr_str} = {answer}.", after=answer),
+    ]
+    return make_sample(
+        "expression_rewrite.factor_trinomial_a_not_1",
+        f"Factor {expr_str}.",
+        trace,
+        answer,
+        {"a": a, "b": b_coef, "c": c_coef, "p": p, "q": q, "r": r, "s": s, "difficulty": diff},
+        verified=check_equiv(a * X**2 + b_coef * X + c_coef, (p * X + q) * (r * X + s)),
+    )
+
+
+def gen_factor_difference_of_squares(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Factor a² - b² as (a+b)(a-b)."""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 5, Difficulty.MEDIUM: 8, Difficulty.HARD: 14}[diff]
+
+    # Always define k and n first.
+    if diff == Difficulty.EASY:
+        k, n = 1, rng.randint(2, hi)
+    elif diff == Difficulty.MEDIUM:
+        k, n = rng.randint(2, 5), rng.randint(2, hi)
+    else:
+        k, n = rng.randint(3, 7), rng.randint(3, hi)
+
+    k_sq, n_sq = k * k, n * n
+    a_str = "x" if k == 1 else f"{k}x"
+    expr_str = f"x^2 - {n_sq}" if k == 1 else f"{k_sq}x^2 - {n_sq}"
+    answer = f"(x + {n})(x - {n})" if k == 1 else f"({k}x + {n})({k}x - {n})"
+
+    trace = [
+        TraceStep(op="recognize_pattern", text=f"Recognize {expr_str} as a difference of squares A² - B²."),
+        TraceStep(op="identify_a_b", text=f"Here A = {a_str} and B = {n}, since ({a_str})² = {k_sq}x² and {n}² = {n_sq}."),
+        TraceStep(op="apply_formula", text=f"A difference of squares factors as (A + B)(A - B) = {answer}."),
+        TraceStep(op="finish", text=f"So {expr_str} = {answer}.", after=answer),
+    ]
+    expected = k_sq * X**2 - n_sq
+    factored = (k * X + n) * (k * X - n)
+    return make_sample(
+        "expression_rewrite.factor_difference_of_squares",
+        f"Factor {expr_str}.",
+        trace,
+        answer,
+        {"k": k, "n": n, "difficulty": diff},
+        verified=check_equiv(expected, factored),
+    )
+
+
+def gen_expand_perfect_square(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Expand (ax + b)² or (ax - b)² using the formula a²x² ± 2abx + b²."""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 5, Difficulty.MEDIUM: 9, Difficulty.HARD: 14}[diff]
+    a = rng.randint(1, hi)
+    b = _nonzero(rng, -hi, hi)
+
+    a_sq = a * a
+    two_ab = 2 * a * b
+    b_sq = b * b
+
+    expr_str = f"({fmt_linear(a, b)})^2"
+    answer = fmt_poly([(a_sq, 2), (two_ab, 1), (b_sq, 0)])
+
+    # Clean variable naming: avoid "(x)" and "1x²" when a=1.
+    p_str = "x" if a == 1 else f"{a}x"
+    p_sq_str = "x²" if a == 1 else f"{a_sq}x²"
+    trace = [
+        TraceStep(op="state_formula", text=f"Use (P ± Q)² = P² ± 2PQ + Q² with P = {p_str}, Q = {abs(b)}."),
+        TraceStep(op="square_first", text=f"P² = ({p_str})² = {p_sq_str}.", meta={"a_sq": a_sq}),
+        TraceStep(op="double_product", text=f"2PQ = 2 × {p_str} × {paren_if_negative(b)} = {two_ab}x.", meta={"two_ab": two_ab}),
+        TraceStep(op="square_second", text=f"Q² = {paren_if_negative(b)}² = {b_sq}.", meta={"b_sq": b_sq}),
+        TraceStep(op="finish", text=f"Combine: {answer}.", after=answer),
+    ]
+    expanded = (a * X + b) ** 2
+    result_expr = a_sq * X**2 + two_ab * X + b_sq
+    return make_sample(
+        "expression_rewrite.expand_perfect_square",
+        f"Expand {expr_str}.",
+        trace,
+        answer,
+        {"a": a, "b": b, "difficulty": diff},
+        verified=check_equiv(expanded, result_expr),
+    )
+
+
 REGISTRY: Dict[str, Any] = {
     "expression_rewrite.collect_like_terms": gen_collect_like_terms,
     "expression_rewrite.distribute": gen_distribute,
@@ -275,4 +419,7 @@ REGISTRY: Dict[str, Any] = {
     "expression_rewrite.rational_simplify": gen_rational_simplify,
     "expression_rewrite.radical_simplify": gen_radical_simplify,
     "expression_rewrite.absolute_value_simplify": gen_absolute_value_simplify,
+    "expression_rewrite.factor_trinomial_a_not_1": gen_factor_trinomial_a_not_1,
+    "expression_rewrite.factor_difference_of_squares": gen_factor_difference_of_squares,
+    "expression_rewrite.expand_perfect_square": gen_expand_perfect_square,
 }

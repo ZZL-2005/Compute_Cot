@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_linear
+from mathgen.formatting import fmt_linear, fmt_signed_term
 
 
 def gen_line_from_two_points(rng: random.Random, cfg: GenConfig) -> Sample:
@@ -76,13 +76,16 @@ def gen_circle_center_radius_by_completing_square(rng: random.Random, cfg: GenCo
     r = rng.randint(2, 10)
     D, E, F = -2 * h, -2 * k, h * h + k * k - r * r
     answer = f"center ({h}, {k}), radius {r}"
+
+    # Use fmt_signed_term to avoid "+ (-4)x" dirty patterns (des_instruct.md sec 5).
+    eq_str = f"x^2 + y^2{fmt_signed_term(D, 'x', first=False)}{fmt_signed_term(E, 'y', first=False)} {fmt_signed_term(F, '', first=False)} = 0"
     trace = [
-        TraceStep(op="complete_x", text=f"x^2 + ({D})x completes to (x - {h})^2 by adding {h * h}."),
-        TraceStep(op="complete_y", text=f"y^2 + ({E})y completes to (y - {k})^2 by adding {k * k}."),
+        TraceStep(op="complete_x", text=f"x^2{fmt_signed_term(D, 'x', first=False)} completes to (x - {h})^2 by adding {h * h}."),
+        TraceStep(op="complete_y", text=f"y^2{fmt_signed_term(E, 'y', first=False)} completes to (y - {k})^2 by adding {k * k}."),
         TraceStep(op="read_circle", text=f"The completed form is (x - {h})^2 + (y - {k})^2 = {r * r}."),
         TraceStep(op="finish", text=f"So the circle has {answer}.", after=answer),
     ]
-    return make_sample("analytic_geometry_schema.circle_center_radius_by_completing_square", f"Find the center and radius of x^2 + y^2 + ({D})x + ({E})y + ({F}) = 0.", trace, answer, {"h": h, "k": k, "r": r, "difficulty": diff}, verified=(D == -2 * h and E == -2 * k and F == h * h + k * k - r * r))
+    return make_sample("analytic_geometry_schema.circle_center_radius_by_completing_square", f"Find the center and radius of {eq_str}.", trace, answer, {"h": h, "k": k, "r": r, "difficulty": diff}, verified=(D == -2 * h and E == -2 * k and F == h * h + k * k - r * r))
 
 
 def gen_line_circle_intersection(rng: random.Random, cfg: GenConfig) -> Sample:

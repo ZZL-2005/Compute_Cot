@@ -230,8 +230,129 @@ def fmt_point_set(value) -> str:
     return f"{{{fmt_value(value)}}}"
 
 
+def ordinal(n: int) -> str:
+    """Return the ordinal string for a positive integer (1st, 2nd, 3rd, ...)."""
+    if 11 <= (n % 100) <= 13:
+        return f"{n}th"
+    last = n % 10
+    if last == 1:
+        return f"{n}st"
+    if last == 2:
+        return f"{n}nd"
+    if last == 3:
+        return f"{n}rd"
+    return f"{n}th"
+
+
 def product_text(values: Sequence[int]) -> str:
     return "×".join(paren_if_negative(v) for v in values)
+
+
+# ---------------------------------------------------------------------------
+# Question template rotation — prevents overfit to specific prefix phrasing.
+# ---------------------------------------------------------------------------
+
+
+def pick_template(rng: random.Random, *variants: str) -> str:
+    """Pick one of several semantically-equivalent question templates.
+
+    Usage in a generator::
+
+        q = pick_template(rng,
+            "Compute {a}+{b}.",
+            "Find {a}+{b}.",
+            "What is {a}+{b}?",
+            "Evaluate the sum {a}+{b}.",
+        ).format(a=a, b=b)
+    """
+    return rng.choice(list(variants))
+
+
+# Common synonym groups for quick import by domain generators.
+SYN_COMPUTE = (
+    "Compute {expr}.",
+    "Find {expr}.",
+    "Calculate {expr}.",
+    "Evaluate {expr}.",
+    "What is {expr}?",
+    "Determine {expr}.",
+)
+
+SYN_SOLVE = (
+    "Solve {eq} for x.",
+    "Find x such that {eq}.",
+    "Find the value of x for which {eq}.",
+    "Determine x in {eq}.",
+    "What is the solution to {eq}?",
+)
+
+SYN_FACTOR = (
+    "Factor {expr}.",
+    "Factorise {expr}.",
+    "Write {expr} as a product of binomials.",
+    "Find the factorisation of {expr}.",
+    "Decompose {expr} into factors.",
+)
+
+SYN_EXPAND = (
+    "Expand {expr}.",
+    "Multiply out {expr}.",
+    "Write {expr} in expanded form.",
+    "Fully expand {expr}.",
+    "Distribute and simplify {expr}.",
+)
+
+SYN_SIMPLIFY = (
+    "Simplify {expr}.",
+    "Reduce {expr} to simplest form.",
+    "Write {expr} in simplest terms.",
+    "Fully simplify {expr}.",
+)
+
+SYN_EVALUATE = (
+    "Evaluate {expr}.",
+    "Compute {expr}.",
+    "Find the value of {expr}.",
+    "What is the result of {expr}?",
+    "Work out {expr}.",
+)
+
+SYN_FIND_AREA = (
+    "Find the area of {shape}.",
+    "Calculate the area of {shape}.",
+    "What is the area of {shape}?",
+    "Determine the area of {shape}.",
+)
+
+SYN_FIND_DISTANCE = (
+    "Find the distance between {a} and {b}.",
+    "Calculate the distance from {a} to {b}.",
+    "What is the distance between {a} and {b}?",
+    "How far is it from {a} to {b}?",
+    "Determine the distance separating {a} and {b}.",
+)
+
+SYN_DIFFERENTIATE = (
+    "Differentiate f(x) = {expr}.",
+    "Find f'(x) for f(x) = {expr}.",
+    "Compute the derivative of f(x) = {expr}.",
+    "Find the derivative of {expr}.",
+    "Determine d/dx of {expr}.",
+)
+
+SYN_FIND_DOMAIN = (
+    "Find the domain of {expr}.",
+    "Determine the domain of {expr}.",
+    "What is the domain of {expr}?",
+    "State the domain of {expr}.",
+)
+
+SYN_CONVERT = (
+    "Convert {a} to {b}.",
+    "Write {a} as {b}.",
+    "Express {a} in {b}.",
+    "Change {a} into {b}.",
+)
 
 
 def sum_text(values: Sequence[int]) -> str:

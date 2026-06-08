@@ -10,6 +10,7 @@ negative number flips the inequality sign (des_instruct.md sec 3.2).
 
 from __future__ import annotations
 
+import math
 import random
 from fractions import Fraction
 from typing import Any, Dict, List
@@ -67,7 +68,7 @@ def gen_one_step_linear(rng: random.Random, cfg: GenConfig) -> Sample:
         sol = Fraction(rng.randint(-hi, hi))
         c = a * sol
         trace = [
-            TraceStep(op="isolate_variable", text=f"Divide both sides of {a}x = {fmt_value(c)} by {a}."),
+            TraceStep(op="isolate_variable", text=f"To isolate x, divide both sides of {a}x = {fmt_value(c)} by {a}."),
             TraceStep(op="simplify", text=f"This gives x = {fmt_value(c)}/{a} = {fmt_fraction(sol)}."),
             TraceStep(op="state_solution", text=f"So the solution is {_ans_eq(sol)}.", after=_ans_eq(sol)),
         ]
@@ -267,13 +268,18 @@ def gen_systems_linear_2x2(rng: random.Random, cfg: GenConfig) -> Sample:
     const_from_y = b1 * y0
     rhs_x = c1 - const_from_y  # = a1 * x0
 
+    # Avoid "+ (-N)×M" and "×-M" dirty patterns (des_instruct.md sec 5).
+    sub_sign = " + " if const_from_y >= 0 else " - "
+    sub_term = f"{abs(b1)}×{paren_if_negative(y0)}"
+    sub_text = f"Substitute y={y0} into equation (1): {fmt_signed_term(a1, 'x', first=True)}{sub_sign}{sub_term} = {c1}, i.e. {fmt_signed_term(a1, 'x', first=True)} {'+' if const_from_y >= 0 else '-'} {abs(const_from_y)} = {c1}."
+
     answer = f"x={x0}, y={y0}"
     trace = [
         TraceStep(op="label_equations", text=f"Label the equations: (1) {eq1} and (2) {eq2}."),
         TraceStep(op="scale_for_elimination", text=f"To eliminate x, multiply equation (1) by {a2} and equation (2) by {a1}: (1') {s1} and (2') {s2}.", meta={"mult1": a2, "mult2": a1}),
         TraceStep(op="subtract_equations", text=f"Subtract (2') from (1'): the x-terms cancel, leaving {fmt_signed_term(cy, 'y', first=True)} = {rhs_y}.", meta={"cy": cy, "rhs_y": rhs_y}),
         TraceStep(op="solve_for_y", text=f"Divide both sides by {cy}: y = {rhs_y}/{paren_if_negative(cy)} = {y0}.", meta={"y": y0}),
-        TraceStep(op="back_substitute", text=f"Substitute y={y0} into equation (1): {fmt_signed_term(a1, 'x', first=True)} + {fmt_mul(b1, y0)} = {c1}, i.e. {fmt_signed_term(a1, 'x', first=True)} {'+' if const_from_y >= 0 else '-'} {abs(const_from_y)} = {c1}.", meta={"const_from_y": const_from_y}),
+        TraceStep(op="back_substitute", text=sub_text, meta={"const_from_y": const_from_y}),
         TraceStep(op="solve_for_x", text=f"So {fmt_signed_term(a1, 'x', first=True)} = {fmt_sub(c1, const_from_y)} = {rhs_x}, giving x = {rhs_x}/{a1} = {x0}.", meta={"x": x0}),
         TraceStep(op="state_solution", text=f"So the solution is {answer}.", after=answer),
     ]
@@ -343,6 +349,159 @@ def gen_quadratic_formula(rng: random.Random, cfg: GenConfig) -> Sample:
     )
 
 
+# -----------------------------------------------------------------------------
+# Missing equation generators (added per coverage review)
+# -----------------------------------------------------------------------------
+
+
+def gen_linear_equation_fraction_coeff(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Solve a linear equation with fractional coefficients (e.g. (2/3)x + 1/2 = 5/6)."""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 6, Difficulty.MEDIUM: 12, Difficulty.HARD: 20}[diff]
+
+    # Build from the solution: (p/q)x + (b/c) = rhs, with x = sol.
+    p = _nonzero(rng, 1, {Difficulty.EASY: 3, Difficulty.MEDIUM: 5, Difficulty.HARD: 8}[diff])
+    q = rng.randint(2, {Difficulty.EASY: 5, Difficulty.MEDIUM: 9, Difficulty.HARD: 12}[diff])
+    while math.gcd(p, q) != 1:
+        p = _nonzero(rng, 1, 8)
+    coef_frac = Fraction(p, q)
+
+    sol = Fraction(rng.randint(-hi, hi))
+
+    # Const term as a fraction b/c with clean denominators.
+    b_const = _nonzero(rng, -hi, hi)
+    c_const = rng.randint(2, {Difficulty.EASY: 5, Difficulty.MEDIUM: 9, Difficulty.HARD: 12}[diff])
+    while math.gcd(abs(b_const), c_const) != 1:
+        b_const = _nonzero(rng, -hi, hi)
+    const_frac = Fraction(b_const, c_const)
+
+    # rhs = coef * sol + const (so sol is a true solution)
+    rhs = coef_frac * sol + const_frac
+
+    # Use lcm for clear display step.
+    denoms = [q, c_const, rhs.denominator]
+    lcd = 1
+    for d in denoms:
+        lcd = lcd * d // math.gcd(lcd, d)
+
+    lhs_scaled = Fraction(p * lcd, q)
+    const_scaled = const_frac * lcd
+    rhs_scaled = rhs * lcd
+
+    trace = [
+        TraceStep(op="multiply_by_lcd", text=f"The equation has fractions with denominators {q}, {c_const}, and {rhs.denominator}. Multiply both sides by lcd={lcd}."),
+        TraceStep(op="clear_fractions", text=f"This gives {fmt_fraction(lhs_scaled)}x {fmt_signed_term(const_scaled, '', first=False)} = {fmt_fraction(rhs_scaled)}."),
+        TraceStep(op="move_constant", text=f"{'Subtract' if const_scaled > 0 else 'Add'} {fmt_fraction(abs(const_scaled))} on both sides: {fmt_fraction(lhs_scaled)}x = {fmt_fraction(rhs_scaled - const_scaled)}."),
+        TraceStep(op="divide_by_coefficient", text=f"Divide by {fmt_fraction(lhs_scaled)}: x = {fmt_fraction(Fraction(rhs_scaled - const_scaled, lhs_scaled))}."),
+        TraceStep(op="state_solution", text=f"So the solution is x={fmt_fraction(sol)}.", after=f"x={fmt_fraction(sol)}"),
+    ]
+    lhs = X * coef_frac + const_frac
+    return make_sample(
+        "equation.linear_equation_fraction_coeff",
+        f"Solve {fmt_fraction(coef_frac)}x {fmt_signed_term(const_frac, '', first=False)} = {fmt_fraction(rhs)}.",
+        trace,
+        f"x={fmt_fraction(sol)}",
+        {"coef": str(coef_frac), "const": str(const_frac), "rhs": str(rhs), "lcd": lcd, "difficulty": diff},
+        verified=check_solution(lhs, rhs, [to_sympy_rational(sol)]),
+    )
+
+
+def gen_system_substitution_method(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Solve a 2×2 linear system using the substitution method."""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 5, Difficulty.MEDIUM: 8, Difficulty.HARD: 12}[diff]
+    sol_hi = {Difficulty.EASY: 5, Difficulty.MEDIUM: 9, Difficulty.HARD: 15}[diff]
+
+    # Build a system where eq1 is already solved for y: y = mx + c1
+    m = _nonzero(rng, -hi, hi)
+    x0 = rng.randint(-sol_hi, sol_hi)
+    y0 = rng.randint(-sol_hi, sol_hi)
+    c1 = y0 - m * x0
+
+    # eq2: ax + by = c2
+    a = _nonzero(rng, -hi, hi)
+    b = _nonzero(rng, -hi, hi)
+    c2 = a * x0 + b * y0
+
+    eq1_str = f"y = {fmt_linear(m, c1)}"
+    eq2_str = f"{_fmt_xy(a, b)} = {c2}"
+
+    # Substitution: replace y in eq2 with m*x + c1
+    sub_expr = a * X + b * (m * X + c1)
+    coef_x = a + b * m
+    const_val = b * c1
+    rhs_x = c2 - const_val  # coef_x * x0
+
+    answer = f"x={x0}, y={y0}"
+    # Avoid "+ -5" dirty pattern when b is negative.
+    b_str = f" + {b}" if b >= 0 else f" - {abs(b)}"
+    trace = [
+        TraceStep(op="label_equations", text=f"Equation (1) is {eq1_str}. Equation (2) is {eq2_str}."),
+        TraceStep(op="substitute", text=f"Substitute y from (1) into (2): {a}x{b_str}({fmt_linear(m, c1)}) = {c2}."),
+        TraceStep(op="distribute", text=f"Distribute: {a}x {fmt_signed_term(b * m, 'x', first=False)} {fmt_signed_term(const_val, '', first=False)} = {c2}."),
+        TraceStep(op="collect", text=f"Collect x terms: {fmt_linear(coef_x, const_val)} = {c2}."),
+        TraceStep(op="move_constant", text=f"Move constant: {fmt_linear(coef_x, 0)} = {rhs_x}."),
+        TraceStep(op="solve_for_x", text=f"Divide by {coef_x}: x = {x0}."),
+        TraceStep(op="back_substitute", text=f"Substitute x={x0} into (1): y = {m}×{paren_if_negative(x0)} {fmt_signed_term(c1, '', first=False)} = {y0}."),
+        TraceStep(op="state_solution", text=f"So the solution is {answer}.", after=answer),
+    ]
+    return make_sample(
+        "equation.system_substitution_method",
+        f"Solve the system {eq1_str}; {eq2_str}.",
+        trace,
+        answer,
+        {"m": m, "c1": c1, "a": a, "b": b, "c2": c2, "solution": [x0, y0], "difficulty": diff},
+        verified=(y0 == m * x0 + c1 and a * x0 + b * y0 == c2),
+    )
+
+
+def gen_completing_the_square(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Solve x²+bx+c=0 by completing the square."""
+    diff = pick_difficulty(rng, cfg)
+    # Construct from roots to guarantee clean solution.
+    hi = {Difficulty.EASY: 5, Difficulty.MEDIUM: 9, Difficulty.HARD: 14}[diff]
+    r1 = rng.randint(-hi, hi)
+    r2 = rng.randint(-hi, hi)
+    b_total = -(r1 + r2)
+    c_const = r1 * r2
+
+    half_b = Fraction(b_total, 2)
+    half_b_sq = half_b**2
+    # (x + half_b)² = half_b² - c
+    rhs_sq = half_b_sq - Fraction(c_const)
+
+    expr = fmt_poly([(1, 2), (b_total, 1), (c_const, 0)])
+    if r1 == r2:
+        answer = f"x={fmt_fraction(Fraction(r1))}"
+    else:
+        roots = sorted({r1, r2})
+        answer = f"x={fmt_fraction(Fraction(roots[0]))} or x={fmt_fraction(Fraction(roots[1]))}"
+
+    trace = [
+        TraceStep(op="move_constant", text=f"Move the constant {c_const} to the right side: x² {fmt_signed_term(b_total, 'x', first=False)} = {-c_const}."),
+        TraceStep(op="half_coefficient", text=f"Take half the coefficient of x: {half_b}. Its square is {fmt_fraction(half_b_sq)}."),
+        TraceStep(op="add_to_both_sides", text=f"Add {fmt_fraction(half_b_sq)} to both sides: x² {fmt_signed_term(b_total, 'x', first=False)} + {fmt_fraction(half_b_sq)} = {fmt_fraction(rhs_sq)}."),
+        TraceStep(op="write_square", text=f"The left side becomes a perfect square: (x {fmt_signed_term(half_b, '', first=False)})² = {fmt_fraction(rhs_sq)}."),
+    ]
+    if rhs_sq == 0:
+        trace.append(TraceStep(op="solve", text=f"Take square root: x {fmt_signed_term(half_b, '', first=False)} = 0, so x = {fmt_fraction(Fraction(r1))}."))
+    else:
+        sqrt_rhs = Fraction(abs(r1 - r2), 2)  # sqrt(rhs_sq) = |r1 - r2| / 2
+        trace.append(TraceStep(op="take_square_root", text=f"Take square root on both sides: x {fmt_signed_term(half_b, '', first=False)} = ±{fmt_fraction(sqrt_rhs)}."))
+        trace.append(TraceStep(op="solve", text=f"So x = {fmt_fraction(Fraction(-half_b - sqrt_rhs))} or x = {fmt_fraction(Fraction(-half_b + sqrt_rhs))}."))
+    trace.append(TraceStep(op="state_solution", text=f"So the solutions are {answer}.", after=answer))
+
+    roots_sympy = [to_sympy_rational(Fraction(r1)), to_sympy_rational(Fraction(r2))]
+    return make_sample(
+        "equation.completing_the_square",
+        f"Solve {expr} = 0 by completing the square.",
+        trace,
+        answer,
+        {"b": b_total, "c": c_const, "half_b": fmt_fraction(half_b), "roots": [r1, r2], "difficulty": diff},
+        verified=check_solution(X**2 + b_total * X + c_const, sp.Integer(0), roots_sympy),
+    )
+
+
 REGISTRY: Dict[str, Any] = {
     "equation.one_step_linear": gen_one_step_linear,
     "equation.multi_step_linear": gen_multi_step_linear,
@@ -351,4 +510,7 @@ REGISTRY: Dict[str, Any] = {
     "equation.systems_linear_2x2": gen_systems_linear_2x2,
     "equation.quadratic_formula": gen_quadratic_formula,
     "inequality.linear_inequality": gen_linear_inequality,
+    "equation.linear_equation_fraction_coeff": gen_linear_equation_fraction_coeff,
+    "equation.system_substitution_method": gen_system_substitution_method,
+    "equation.completing_the_square": gen_completing_the_square,
 }

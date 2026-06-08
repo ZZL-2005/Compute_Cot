@@ -9,10 +9,12 @@ is checked directly.
 from __future__ import annotations
 
 import random
+from fractions import Fraction
 from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
+from mathgen.formatting import fmt_fraction
 from mathgen.formatting import fmt_linear, fmt_mul
 
 
@@ -154,6 +156,59 @@ def gen_solution_verification(rng: random.Random, cfg: GenConfig) -> Sample:
     )
 
 
+def gen_multiply_by_expression(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Check domain when multiplying both sides of an equation by an expression.
+
+    des_instruct.md sec 3.2 / 12.6: multiplying by (x - a) may introduce an
+    extraneous root at x = a, so the domain restriction must be tracked.
+    """
+    diff = pick_difficulty(rng, cfg)
+    a = rng.randint(-8, 8)
+    sol = rng.randint(-10, 10)
+    while sol == a:  # ensure solution is valid (not at the restricted point)
+        sol = rng.randint(-10, 10)
+
+    # Build equation: N/(x-a) = 1 → N = x-a → x = N+a
+    # Actually use: (x+k)/(x-a) = c → multiply by (x-a)
+    k = rng.randint(-5, 5)
+    c = rng.randint(2, 5)
+    # Construct so sol works: (sol + k) = c * (sol - a)
+    # Rearranged: sol + k = c*sol - c*a → sol - c*sol = -c*a - k → sol(1-c) = -(c*a + k)
+    # This is getting complicated. Simpler approach:
+    # Build: a simple equation then multiply by (x - a)
+
+    # Equation: b = c * (x - a) for x ≠ a
+    # After multiplying: b = c(x - a) → x = b/c + a (if c ≠ 0)
+    b = rng.randint(-20, 20)
+    while b == 0:  # ensure nonzero numerator for meaningful fraction
+        b = rng.randint(-20, 20)
+    c_val = rng.choice([1, -1, 2, -2, 3, -3])
+    # Solve: b = c*(x - a) → x - a = b/c → x = a + b/c
+    rhs = Fraction(b, c_val)
+    sol = a + rhs
+
+    expr = f"({b})/(x - ({a}))"
+    eq_text = f"{b}/(x - ({a})) = {c_val}" if c_val != 1 else f"{b}/(x - ({a})) = 1"
+
+    # Use clean fraction — avoid "a/-b" dirty pattern when denominator is negative.
+    div_repr = f"{b}/{c_val}" if c_val > 0 else f"{b}/({c_val})"
+    trace = [
+        TraceStep(op="state_domain", text=f"The expression {expr} is undefined when the denominator is zero, so x ≠ {a}.", meta={"restricted": a}),
+        TraceStep(op="multiply_by_expression", text=f"Multiply both sides by (x - ({a})). Since we are multiplying by an expression that could be zero, we must check later.", meta={"factor": f"x - ({a})"}),
+        TraceStep(op="solve", text=f"This gives {b} = {c_val}(x - ({a})). Solve: x - ({a}) = {div_repr} = {fmt_fraction(rhs)}, so x = {fmt_fraction(sol)}."),
+        TraceStep(op="check_domain", text=f"Check: {fmt_fraction(sol)} ≠ {a}, so the solution is valid.", meta={"valid": True}),
+        TraceStep(op="finish", text=f"So the solution is x={fmt_fraction(sol)}.", after=f"x={fmt_fraction(sol)}"),
+    ]
+    return make_sample(
+        "domain_assumption.multiply_by_expression",
+        f"Solve {eq_text} for x, tracking domain restrictions.",
+        trace,
+        f"x={fmt_fraction(sol)}",
+        {"a": a, "b": b, "c": c_val, "solution": str(sol), "difficulty": diff},
+        verified=(sol != a and Fraction(b, c_val) == sol - a),
+    )
+
+
 REGISTRY: Dict[str, Any] = {
     "domain_assumption.denominator_nonzero": gen_denominator_nonzero,
     "domain_assumption.radical_nonnegative": gen_radical_nonnegative,
@@ -161,4 +216,5 @@ REGISTRY: Dict[str, Any] = {
     "domain_assumption.tangent_domain": gen_tangent_domain,
     "domain_assumption.square_both_sides_check": gen_square_both_sides_check,
     "domain_assumption.solution_verification": gen_solution_verification,
+    "domain_assumption.multiply_by_expression": gen_multiply_by_expression,
 }
