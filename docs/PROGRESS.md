@@ -19,10 +19,10 @@
 | 7 analytic_geometry | ✅ 完成 | analytic_geometry_core | 8 source |
 | 8 differentiation | ✅ 完成 | calculus_core | 8 source(全套求导) |
 | 9 number_theory | ✅ 完成 | arithmetic_core + number_theory_core | gcd/lcm/质因数 + parity/divisibility/mod/factor_pairs |
-| 10 ratio_percent | 🟡 部分 | arithmetic_core(+ ratio_core) | 补 ratio_simplify/direct/inverse/unit_rate |
+| 10 ratio_percent | ✅ 完成 | arithmetic_core + ratio_core | percent/proportion + ratio_simplify/direct/inverse/unit_rate |
 | 11 comparison | ✅ 完成 | comparison_core | 8 source |
-| 12 domain_assumption | ⬜ 待做 | domain_assumption_core | |
-| 13 case_split | ⬜ 待做 | case_split_core | |
+| 12 domain_assumption | ✅ 完成 | domain_assumption_core | 6 source |
+| 13 case_split | ✅ 完成 | case_split_core | 5 source |
 | 14 set_logic | ✅ 完成 | set_logic_core | 9 source |
 | 15 exp_log | ✅ 完成 | exp_log_core | 9 source |
 | 16 sequences | ✅ 完成 | sequences_core | 7 source(含 geom_sum/recurrence/sigma/telescoping) |
@@ -59,3 +59,4 @@
 - 2026-06-08 批次3: complex(8) + vectors(8) + matrices(7)。全部 PASS。sources: 110 → 133。
 - 2026-06-08 批次4: combinatorics(10) + plane_geometry(8) + polynomial_advanced(7)。全部 PASS。sources: 133 → 158。
 - 2026-06-08 批次5: functions补全(+7) + expression_rewrite补全(+3) + equations_advanced(3) + inequalities_advanced(5)。全部 PASS。sources: 158 → 176。
+- 2026-06-08 批次6: ratio_core(4) + domain_assumption(6) + case_split(5)。全部 PASS。sources: 176 → 194。
