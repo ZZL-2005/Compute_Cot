@@ -65,6 +65,61 @@ def write_jsonl(samples: Sequence[Sample], path: Path) -> None:
             f.write(json.dumps(s.to_json_obj(), ensure_ascii=False, default=json_default) + "\n")
 
 
+def _md_escape_table_cell(value: object) -> str:
+    text = str(value)
+    return text.replace("\\", "\\\\").replace("|", "\\|").replace("\n", "<br>")
+
+
+def write_markdown(samples: Sequence[Sample], path: Path) -> None:
+    """Write generated samples as a human-readable Markdown exhibit."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines: List[str] = [
+        "# MathGen Samples",
+        "",
+        f"Total samples: {len(samples)}",
+        "",
+    ]
+    for i, s in enumerate(samples, start=1):
+        user = s.messages[0]["content"]
+        assistant = s.messages[1]["content"]
+        lines.extend(
+            [
+                f"## {i}. {s.source}",
+                "",
+                "### Problem",
+                "",
+                user,
+                "",
+                "### Solution",
+                "",
+                "```text",
+                assistant,
+                "```",
+                "",
+                "### Answer",
+                "",
+                f"`{s.answer}`",
+                "",
+                "### Metadata",
+                "",
+                "| Field | Value |",
+                "| --- | --- |",
+                f"| source | {_md_escape_table_cell(s.source)} |",
+                f"| difficulty | {_md_escape_table_cell(s.metadata.get('difficulty', ''))} |",
+                f"| verified | {_md_escape_table_cell(s.verified)} |",
+                "",
+            ]
+        )
+        if s.trace:
+            lines.extend(["### Trace", "", "| Step | Operation | Text |", "| ---: | --- | --- |"])
+            for j, step in enumerate(s.trace, start=1):
+                lines.append(
+                    f"| {j} | {_md_escape_table_cell(step.op)} | {_md_escape_table_cell(step.text)} |"
+                )
+            lines.append("")
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def print_pretty(samples: Sequence[Sample], k: int) -> None:
     for i, s in enumerate(samples[:k]):
         print("=" * 80)
@@ -83,6 +138,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument("--n", type=int, default=50, help="Number of samples to generate.")
     parser.add_argument("--seed", type=int, default=7, help="Random seed (same seed -> reproducible output).")
     parser.add_argument("--out", type=str, default="data/mathgen_samples.jsonl", help="Output JSONL path.")
+    parser.add_argument("--markdown-out", type=str, default="", help="Optional human-readable Markdown output path.")
     parser.add_argument("--pretty", type=int, default=3, help="Print the first K examples.")
     parser.add_argument("--difficulty", choices=[Difficulty.EASY, Difficulty.MEDIUM, Difficulty.HARD, Difficulty.MIXED], default=Difficulty.MIXED)
     parser.add_argument("--sources", type=str, default="", help="Comma-separated source names to sample from.")
@@ -126,6 +182,10 @@ def main(argv: Optional[List[str]] = None) -> None:
     out_path = Path(args.out)
     write_jsonl(samples, out_path)
     print(f"Wrote {len(samples)} samples to {out_path}")
+    markdown_path = Path(args.markdown_out) if args.markdown_out else None
+    if markdown_path:
+        write_markdown(samples, markdown_path)
+        print(f"Wrote Markdown preview to {markdown_path}")
 
     if not args.no_lineage:
         used_sources = sorted({s.source for s in samples})
@@ -140,6 +200,29 @@ def main(argv: Optional[List[str]] = None) -> None:
         )
         sc = record_production(out_path, produced_by, records=len(samples))
         print(f"Wrote lineage sidecar to {sc}")
+        if markdown_path:
+            markdown_produced_by = ProducedBy(
+                command=["mathgen"] + (argv if argv is not None else sys.argv[1:]),
+                seed=args.seed,
+                config={
+                    "difficulty": args.difficulty,
+                    "n": args.n,
+                    "cycle": args.cycle,
+                    "format": "markdown",
+                    "source_jsonl": str(out_path),
+                },
+                sources=used_sources,
+                code_modules=code_modules,
+                inputs=SPEC_INPUTS + [{"type": "data", "ref": str(out_path)}],
+            )
+            markdown_sc = record_production(markdown_path, markdown_produced_by, records=len(samples))
+            record_consumption(
+                out_path,
+                "mathgen markdown export",
+                note=f"rendered to {markdown_path}",
+                outputs=[str(markdown_path)],
+            )
+            print(f"Wrote Markdown lineage sidecar to {markdown_sc}")
 
     if args.pretty:
         print_pretty(samples, args.pretty)

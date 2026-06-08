@@ -32,6 +32,14 @@ from mathgen.domains import (
     ratio_core,
     domain_assumption_core,
     case_split_core,
+    rational_inequality_schema,
+    absolute_value_schema,
+    function_property_schema,
+    trigonometric_schema,
+    sequence_schema,
+    analytic_geometry_schema,
+    derivative_schema,
+    word_problem_core,
 )
 
 Generator = Callable[[random.Random, GenConfig], Sample]
@@ -62,6 +70,14 @@ DOMAIN_MODULES = [
     ratio_core,
     domain_assumption_core,
     case_split_core,
+    rational_inequality_schema,
+    absolute_value_schema,
+    function_property_schema,
+    trigonometric_schema,
+    sequence_schema,
+    analytic_geometry_schema,
+    derivative_schema,
+    word_problem_core,
 ]
 
 

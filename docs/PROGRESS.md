@@ -35,14 +35,14 @@
 | 23 limits | ✅ 最简完成 | calculus_core | direct_substitution + factor_cancel |
 | 24 integration | ✅ 最简完成 | calculus_core | power_integral + definite_basic |
 | 25 quadratic schema | ✅ 完成 | quadratic_schema | |
-| 26 rational_inequality_schema | ⬜ 待做 | inequalities 扩展 | |
-| 27 absolute_value_schema | ⬜ 待做 | abs/inequalities | |
-| 28 function_property_schema | ⬜ 待做 | functions_core 扩展 | |
-| 29 trigonometric_schema | ⬜ 待做 | trigonometry_core | |
-| 30 sequence_schema | ⬜ 待做 | sequences_core | |
-| 31 analytic_geometry_schema | ⬜ 待做 | analytic_geometry_core | |
-| 32 derivative_schema | ⬜ 待做 | calculus_core | |
-| 33 word_problem_bridge | ⬜ 待做 | word_problem_core | |
+| 26 rational_inequality_schema | ✅ 完成 | rational_inequality_schema | 5 source |
+| 27 absolute_value_schema | ✅ 完成 | absolute_value_schema | 5 source |
+| 28 function_property_schema | ✅ 完成 | function_property_schema | 8 source |
+| 29 trigonometric_schema | ✅ 完成 | trigonometric_schema | 6 source |
+| 30 sequence_schema | ✅ 完成 | sequence_schema | 6 source |
+| 31 analytic_geometry_schema | ✅ 完成 | analytic_geometry_schema | 8 source |
+| 32 derivative_schema | ✅ 完成 | derivative_schema | 6 source |
+| 33 word_problem_bridge | ✅ 完成 | word_problem_core | 14 source |
 
 图例:✅ 完成并通过验收 / 🟡 进行中或部分 / ⬜ 待做
 
@@ -60,3 +60,6 @@
 - 2026-06-08 批次4: combinatorics(10) + plane_geometry(8) + polynomial_advanced(7)。全部 PASS。sources: 133 → 158。
 - 2026-06-08 批次5: functions补全(+7) + expression_rewrite补全(+3) + equations_advanced(3) + inequalities_advanced(5)。全部 PASS。sources: 158 → 176。
 - 2026-06-08 批次6: ratio_core(4) + domain_assumption(6) + case_split(5)。全部 PASS。sources: 176 → 194。
+- 2026-06-08 批次7: rational_inequality_schema(5) + absolute_value_schema(5) + function_property_schema(8) +
+  trigonometric_schema(6) + sequence_schema(6) + analytic_geometry_schema(8) + derivative_schema(6) +
+  word_problem_bridge(14)。全部 PASS(`uv run python scripts/check_sources.py`: 249 sources, verify/validate/脏片段扫描均 0 失败)。

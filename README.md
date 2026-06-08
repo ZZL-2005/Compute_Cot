@@ -29,6 +29,10 @@ uv run python -m mathgen.cli --self-test --self-test-per-source 100
 # Generate a dataset (reproducible for a fixed --seed)
 uv run python -m mathgen.cli --n 1000 --seed 7 --out data/train.jsonl
 
+# Also render the same samples as Markdown for human review
+uv run python -m mathgen.cli --n 20 --seed 7 \
+    --out data/review.jsonl --markdown-out data/review.md
+
 # Generate only specific sources / a fixed difficulty
 uv run python -m mathgen.cli --n 200 --difficulty hard \
     --sources quadratic.inequality_two_roots,inequality.linear_inequality
@@ -77,6 +81,8 @@ Every produced file is traceable one level up and one level down (`AGENTS.md`):
 * `<file>.jsonl.lineage.json` — sidecar: producer (tool, version, git commit,
   command, seed, config, sources, code modules), upstream `inputs` (the spec
   docs), and the growing list of downstream `consumed_by` entries.
+* Markdown previews written with `--markdown-out` also receive a lineage sidecar
+  and record the source JSONL as an upstream input.
 * `data/lineage/manifest.jsonl` — append-only log of every produce/consume event.
 
 ```bash
