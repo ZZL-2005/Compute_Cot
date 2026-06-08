@@ -15,9 +15,9 @@
 | 3 equations | 🟡 部分 | equation_inequality_core | 缺 rational/radical/abs/exp/log 方程 |
 | 4 inequalities | 🟡 部分 | equation_inequality_core | 仅线性;缺 compound/rational/abs/区间/exp/log |
 | 5 functions | 🟡 部分 | functions_core | 仅 eval/composite;缺 piecewise/domain/range/inverse/zero/sign/transform |
-| 6 trigonometry | ⬜ 待做 | trigonometry_core | |
-| 7 analytic_geometry | ⬜ 待做 | analytic_geometry_core | |
-| 8 differentiation | ⬜ 待做 | calculus_core | |
+| 6 trigonometry | ✅ 完成 | trigonometry_core | 6 source(sympy 精确值) |
+| 7 analytic_geometry | ✅ 完成 | analytic_geometry_core | 8 source |
+| 8 differentiation | ✅ 完成 | calculus_core | 8 source(全套求导) |
 | 9 number_theory | ✅ 完成 | arithmetic_core + number_theory_core | gcd/lcm/质因数 + parity/divisibility/mod/factor_pairs |
 | 10 ratio_percent | 🟡 部分 | arithmetic_core(+ ratio_core) | 补 ratio_simplify/direct/inverse/unit_rate |
 | 11 comparison | ✅ 完成 | comparison_core | 8 source |
@@ -32,8 +32,8 @@
 | 20 combinatorics/prob/stats | ⬜ 待做 | combinatorics_core | |
 | 21 plane_geometry | ⬜ 待做 | geometry_formula_core | |
 | 22 polynomial_advanced | ⬜ 待做 | polynomial_advanced_core | |
-| 23 limits | ⬜ 最简 | calculus_core | 只 direct_substitution + factor_cancel |
-| 24 integration | ⬜ 最简 | calculus_core | 只 power_integral + definite_basic |
+| 23 limits | ✅ 最简完成 | calculus_core | direct_substitution + factor_cancel |
+| 24 integration | ✅ 最简完成 | calculus_core | power_integral + definite_basic |
 | 25 quadratic schema | ✅ 完成 | quadratic_schema | |
 | 26 rational_inequality_schema | ⬜ 待做 | inequalities 扩展 | |
 | 27 absolute_value_schema | ⬜ 待做 | abs/inequalities | |
@@ -53,4 +53,6 @@
 - 2026-06-08: 建立本进度文档。
 - 2026-06-08 批次1(commit 见下): exp_log(9) + sequences补全(+4) + number_theory_core(4) +
   comparison(8) + set_logic(9)。新增 `scripts/check_sources.py` 验收脚本。
-  全部 PASS(verify + validate + 脏片段扫描)。sources: 50 → 83。
+  全部 PASS(verify + validate + 脏片段扫描)。sources: 50 → 84。
+- 2026-06-08 批次2: trigonometry(6) + analytic_geometry(8) + calculus_core(微分8 + 极限2 + 积分2)。
+  全部 PASS。sources: 84 → 110。

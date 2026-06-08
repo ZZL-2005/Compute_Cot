@@ -18,6 +18,9 @@ from mathgen.domains import (
     quadratic_schema,
     sequences_core,
     set_logic_core,
+    trigonometry_core,
+    analytic_geometry_core,
+    calculus_core,
 )
 
 Generator = Callable[[random.Random, GenConfig], Sample]
@@ -34,6 +37,9 @@ DOMAIN_MODULES = [
     number_theory_core,
     comparison_core,
     set_logic_core,
+    trigonometry_core,
+    analytic_geometry_core,
+    calculus_core,
 ]
 
 
