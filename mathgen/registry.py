@@ -27,6 +27,8 @@ from mathgen.domains import (
     combinatorics_core,
     geometry_formula_core,
     polynomial_advanced_core,
+    equations_advanced_core,
+    inequalities_advanced_core,
 )
 
 Generator = Callable[[random.Random, GenConfig], Sample]
@@ -52,6 +54,8 @@ DOMAIN_MODULES = [
     combinatorics_core,
     geometry_formula_core,
     polynomial_advanced_core,
+    equations_advanced_core,
+    inequalities_advanced_core,
 ]
 
 

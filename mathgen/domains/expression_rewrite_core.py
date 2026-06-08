@@ -13,7 +13,18 @@ import sympy as sp
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_add, fmt_factor, fmt_mul, fmt_poly, fmt_signed_term, paren_if_negative, sum_text
+from mathgen.formatting import (
+    fmt_add,
+    fmt_factor,
+    fmt_linear,
+    fmt_mul,
+    fmt_poly,
+    fmt_radical,
+    fmt_signed_term,
+    paren_if_negative,
+    sqrt_simplify,
+    sum_text,
+)
 from mathgen.verify import X, check_equiv
 
 
@@ -184,10 +195,84 @@ def gen_exponent_product(rng: random.Random, cfg: GenConfig) -> Sample:
     )
 
 
+def gen_rational_simplify(rng: random.Random, cfg: GenConfig) -> Sample:
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 6, Difficulty.MEDIUM: 10, Difficulty.HARD: 14}[diff]
+    p = _nonzero(rng, -hi, hi)
+    q = _nonzero(rng, -hi, hi)
+    numer = fmt_poly([(1, 2), (p + q, 1), (p * q, 0)])
+    denom = fmt_factor(p)
+    answer = fmt_linear(1, q)
+    trace = [
+        TraceStep(op="factor_numerator", text=f"Factor the numerator: {numer} = {fmt_factor(p)}{fmt_factor(q)}."),
+        TraceStep(op="cancel", text=f"Cancel the common factor {fmt_factor(p)}: the expression becomes {answer}."),
+        TraceStep(op="finish", text=f"So the simplified form is {answer}.", after=answer),
+    ]
+    return make_sample(
+        "expression_rewrite.rational_simplify",
+        f"Simplify ({numer})/{denom}.",
+        trace,
+        answer,
+        {"p": p, "q": q, "difficulty": diff},
+        verified=check_equiv((X**2 + (p + q) * X + p * q) / (X + p), X + q),
+    )
+
+
+def gen_radical_simplify(rng: random.Random, cfg: GenConfig) -> Sample:
+    diff = pick_difficulty(rng, cfg)
+    base = rng.choice([2, 3, 5, 6, 7])
+    o1 = rng.randint(1, {Difficulty.EASY: 3, Difficulty.MEDIUM: 5, Difficulty.HARD: 8}[diff])
+    o2 = rng.randint(1, {Difficulty.EASY: 3, Difficulty.MEDIUM: 5, Difficulty.HARD: 8}[diff])
+    n1, n2 = o1 * o1 * base, o2 * o2 * base
+    a1, _ = sqrt_simplify(n1)
+    a2, _ = sqrt_simplify(n2)
+    total = a1 + a2
+    answer = fmt_radical(total, base)
+    trace = [
+        TraceStep(op="simplify_first", text=f"Simplify the first radical: sqrt({n1}) = {fmt_radical(a1, base)}."),
+        TraceStep(op="simplify_second", text=f"Simplify the second radical: sqrt({n2}) = {fmt_radical(a2, base)}."),
+        TraceStep(op="combine_like", text=f"Both have sqrt({base}), so add coefficients: {a1} + {a2} = {total}."),
+        TraceStep(op="finish", text=f"So sqrt({n1}) + sqrt({n2}) = {answer}.", after=answer),
+    ]
+    return make_sample(
+        "expression_rewrite.radical_simplify",
+        f"Simplify sqrt({n1}) + sqrt({n2}).",
+        trace,
+        answer,
+        {"n1": n1, "n2": n2, "base": base, "difficulty": diff},
+        verified=(total * total * base == (a1 + a2) ** 2 * base),
+    )
+
+
+def gen_absolute_value_simplify(rng: random.Random, cfg: GenConfig) -> Sample:
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 9, Difficulty.MEDIUM: 20, Difficulty.HARD: 50}[diff]
+    a = rng.randint(-hi, hi)
+    b = rng.randint(-hi, hi)
+    inside = a - b
+    result = abs(inside)
+    trace = [
+        TraceStep(op="compute_inside", text=f"First compute inside the absolute value: {a} - ({b}) = {inside}."),
+        TraceStep(op="apply_abs", text=f"The absolute value of {inside} is {result}."),
+        TraceStep(op="finish", text=f"So |{a} - ({b})| = {result}.", after=str(result)),
+    ]
+    return make_sample(
+        "expression_rewrite.absolute_value_simplify",
+        f"Simplify |{a} - ({b})|.",
+        trace,
+        str(result),
+        {"a": a, "b": b, "difficulty": diff},
+        verified=(result == abs(a - b)),
+    )
+
+
 REGISTRY: Dict[str, Any] = {
     "expression_rewrite.collect_like_terms": gen_collect_like_terms,
     "expression_rewrite.distribute": gen_distribute,
     "expression_rewrite.expand_binomial_product": gen_expand_binomial_product,
     "expression_rewrite.factor_trinomial": gen_factor_trinomial,
     "expression_rewrite.exponent_product": gen_exponent_product,
+    "expression_rewrite.rational_simplify": gen_rational_simplify,
+    "expression_rewrite.radical_simplify": gen_radical_simplify,
+    "expression_rewrite.absolute_value_simplify": gen_absolute_value_simplify,
 }

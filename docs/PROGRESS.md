@@ -11,10 +11,10 @@
 |---|---|---|---|
 | 0 symbol_parsing | 隐式 | formatting.py | 通过统一渲染体现,不单独出题 |
 | 1 arithmetic | ✅ 完成 | arithmetic_core | |
-| 2 expression_rewrite | 🟡 部分 | expression_rewrite_core | 缺 rational/radical/abs 化简 |
-| 3 equations | 🟡 部分 | equation_inequality_core | 缺 rational/radical/abs/exp/log 方程 |
-| 4 inequalities | 🟡 部分 | equation_inequality_core | 仅线性;缺 compound/rational/abs/区间/exp/log |
-| 5 functions | 🟡 部分 | functions_core | 仅 eval/composite;缺 piecewise/domain/range/inverse/zero/sign/transform |
+| 2 expression_rewrite | ✅ 完成 | expression_rewrite_core | 8 source(含 rational/radical/abs) |
+| 3 equations | ✅ 完成 | equation_inequality_core + equations_advanced_core | 线性/二次/系统/公式 + rational/radical/abs(exp/log 在 exp_log) |
+| 4 inequalities | ✅ 完成 | equation_inequality_core + inequalities_advanced_core | linear/compound/abs/rational/exp/log;区间运算在 set_logic |
+| 5 functions | ✅ 完成 | functions_core | 9 source(eval/composite/piecewise/domain/range/inverse/zero/sign/transform) |
 | 6 trigonometry | ✅ 完成 | trigonometry_core | 6 source(sympy 精确值) |
 | 7 analytic_geometry | ✅ 完成 | analytic_geometry_core | 8 source |
 | 8 differentiation | ✅ 完成 | calculus_core | 8 source(全套求导) |
@@ -58,3 +58,4 @@
   全部 PASS。sources: 84 → 110。
 - 2026-06-08 批次3: complex(8) + vectors(8) + matrices(7)。全部 PASS。sources: 110 → 133。
 - 2026-06-08 批次4: combinatorics(10) + plane_geometry(8) + polynomial_advanced(7)。全部 PASS。sources: 133 → 158。
+- 2026-06-08 批次5: functions补全(+7) + expression_rewrite补全(+3) + equations_advanced(3) + inequalities_advanced(5)。全部 PASS。sources: 158 → 176。
