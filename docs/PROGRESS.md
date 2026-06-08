@@ -26,9 +26,9 @@
 | 14 set_logic | ✅ 完成 | set_logic_core | 9 source |
 | 15 exp_log | ✅ 完成 | exp_log_core | 9 source |
 | 16 sequences | ✅ 完成 | sequences_core | 7 source(含 geom_sum/recurrence/sigma/telescoping) |
-| 17 complex | ⬜ 待做 | complex_core | |
-| 18 vectors | ⬜ 待做 | vectors_core | |
-| 19 matrices | ⬜ 待做 | matrices_core | |
+| 17 complex | ✅ 完成 | complex_core | 8 source |
+| 18 vectors | ✅ 完成 | vectors_core | 8 source |
+| 19 matrices | ✅ 完成 | matrices_core | 7 source |
 | 20 combinatorics/prob/stats | ⬜ 待做 | combinatorics_core | |
 | 21 plane_geometry | ⬜ 待做 | geometry_formula_core | |
 | 22 polynomial_advanced | ⬜ 待做 | polynomial_advanced_core | |
@@ -56,3 +56,4 @@
   全部 PASS(verify + validate + 脏片段扫描)。sources: 50 → 84。
 - 2026-06-08 批次2: trigonometry(6) + analytic_geometry(8) + calculus_core(微分8 + 极限2 + 积分2)。
   全部 PASS。sources: 84 → 110。
+- 2026-06-08 批次3: complex(8) + vectors(8) + matrices(7)。全部 PASS。sources: 110 → 133。
