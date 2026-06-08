@@ -235,10 +235,10 @@ def gen_conic_basic(rng: random.Random, cfg: GenConfig) -> Sample:
     else:
         eq = f"y = {a}x^2"
         reason = "only one variable is squared"
+    article = "an" if kind[0] in "aeiou" else "a"
     trace = [
         TraceStep(op="inspect_form", text=f"Look at the equation {eq}."),
-        TraceStep(op="apply_rule", text=f"This is a {kind} because {reason}."),
-        article = "an" if kind[0] in "aeiou" else "a"
+        TraceStep(op="apply_rule", text=f"This is {article} {kind} because {reason}."),
         TraceStep(op="finish", text=f"So the conic is {article} {kind}.", after=kind),
     ]
     return make_sample(
