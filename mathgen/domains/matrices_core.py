@@ -88,17 +88,19 @@ def gen_matrix_multiply(rng: random.Random, cfg: GenConfig) -> Sample:
     hi = {Difficulty.EASY: 4, Difficulty.MEDIUM: 7, Difficulty.HARD: 10}[diff]
     A, B = _mat(rng, 2, hi), _mat(rng, 2, hi)
     C = [[A[i][0] * B[0][j] + A[i][1] * B[1][j] for j in range(2)] for i in range(2)]
-    lines = []
+    trace = [
+        TraceStep(op="state_rule", text=f"Multiply {fmt_mat(A)} × {fmt_mat(B)}. Each entry c[ij] is the dot product of row i of A with column j of B."),
+    ]
     for i in range(2):
         for j in range(2):
             p1, p2 = A[i][0] * B[0][j], A[i][1] * B[1][j]
-            lines.append(f"c[{i+1}{j+1}] = {fmt_mul(A[i][0], B[0][j])} + {fmt_mul(A[i][1], B[1][j])} = {fmt_add(p1, p2)} = {C[i][j]}")
+            trace.append(TraceStep(
+                op="compute_entry",
+                text=f"c[{i+1}{j+1}] = row{i+1}·col{j+1} = {fmt_mul(A[i][0], B[0][j])} + {fmt_mul(A[i][1], B[1][j])} = {fmt_add(p1, p2)} = {C[i][j]}.",
+                meta={"row": i, "col": j, "entry": C[i][j]},
+            ))
     ans = fmt_mat(C)
-    trace = [
-        TraceStep(op="state_rule", text="Each entry c[ij] is the dot product of row i of the first matrix with column j of the second."),
-        TraceStep(op="entries", text="; ".join(lines) + "."),
-        TraceStep(op="finish", text=f"So the product is {ans}.", after=ans),
-    ]
+    trace.append(TraceStep(op="finish", text=f"So the product is {ans}.", after=ans))
     return make_sample(
         "matrices.matrix_multiply",
         f"Compute {fmt_mat(A)} × {fmt_mat(B)}.",
