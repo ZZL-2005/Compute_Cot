@@ -624,13 +624,20 @@ def gen_fraction_division(rng: random.Random, cfg: GenConfig) -> Sample:
         f2 = Fraction(1, 2)
     n1, d1 = raw_fraction_from_fraction(f1, rng, max_scale=3)
     n2, d2 = raw_fraction_from_fraction(f2, rng, max_scale=3)
-    raw_num = n1 * d2
-    raw_den = d1 * n2
+    # The reciprocal of n2/d2 is d2/n2. Normalize the sign onto the numerator so the
+    # denominator stays positive; otherwise the negative lands on raw_den and the
+    # numerator/denominator product lines render with signs that no longer match the
+    # final "Simplify ..." step (which fmt_raw_fraction renormalizes onto the numerator).
+    rn, rd = d2, n2
+    if rd < 0:
+        rn, rd = -rn, -rd
+    raw_num = n1 * rn
+    raw_den = d1 * rd
     result = Fraction(raw_num, raw_den)
     trace = [
-        TraceStep(op="take_reciprocal", text=f"To divide by {fmt_raw_fraction(n2, d2)}, multiply by its reciprocal {fmt_raw_fraction(d2, n2)}."),
-        TraceStep(op="multiply_numerators", text=f"Multiply the numerators: {fmt_mul(n1, d2)}={raw_num}."),
-        TraceStep(op="multiply_denominators", text=f"Multiply the denominators: {fmt_mul(d1, n2)}={raw_den}."),
+        TraceStep(op="take_reciprocal", text=f"To divide by {fmt_raw_fraction(n2, d2)}, multiply by its reciprocal {fmt_raw_fraction(rn, rd)}."),
+        TraceStep(op="multiply_numerators", text=f"Multiply the numerators: {fmt_mul(n1, rn)}={raw_num}."),
+        TraceStep(op="multiply_denominators", text=f"Multiply the denominators: {fmt_mul(d1, rd)}={raw_den}."),
         TraceStep(op="simplify_fraction", text=simplify_step_text(raw_num, raw_den, result)),
     ]
     return make_sample(
@@ -1098,30 +1105,38 @@ def gen_decimal_division_by_decimal(rng: random.Random, cfg: GenConfig) -> Sampl
     diff = pick_difficulty(rng, cfg)
     places_q = rng.randint(1, {Difficulty.EASY: 1, Difficulty.MEDIUM: 2, Difficulty.HARD: 2}[diff])
     places_d = rng.randint(1, {Difficulty.EASY: 1, Difficulty.MEDIUM: 2, Difficulty.HARD: 3}[diff])
-    divisor_scaled = rng.randint(3, {Difficulty.EASY: 20, Difficulty.MEDIUM: 80, Difficulty.HARD: 200}[diff])
-    quotient_scaled = rng.randint(2, {Difficulty.EASY: 20, Difficulty.MEDIUM: 80, Difficulty.HARD: 300}[diff])
-    dividend_scaled = divisor_scaled * quotient_scaled  # exact division
+    max_div = {Difficulty.EASY: 20, Difficulty.MEDIUM: 80, Difficulty.HARD: 200}[diff]
+    max_quo = {Difficulty.EASY: 20, Difficulty.MEDIUM: 80, Difficulty.HARD: 300}[diff]
+    # Reject any operand ending in 0: a trailing zero would be stripped from the
+    # displayed decimal (e.g. 2.0 -> "2"), so the shown numbers would no longer carry
+    # the stated number of decimal places and the place-counting step would not match.
+    for _ in range(10_000):
+        divisor_scaled = rng.randint(3, max_div)
+        quotient_scaled = rng.randint(2, max_quo)
+        dividend_scaled = divisor_scaled * quotient_scaled  # exact division
+        if divisor_scaled % 10 and quotient_scaled % 10 and dividend_scaled % 10:
+            break
 
+    places_dividend = places_q + places_d
     divisor_str = fmt_decimal_from_scaled(divisor_scaled, places_d)
-    dividend_str = fmt_decimal_from_scaled(dividend_scaled, places_q + places_d)
+    dividend_str = fmt_decimal_from_scaled(dividend_scaled, places_dividend)
     quotient_str = fmt_decimal_from_scaled(quotient_scaled, places_q)
 
-    shift = max(places_q + places_d, places_d)
-    d_int = divisor_scaled * 10 ** (shift - places_d)
-    n_int = dividend_scaled * 10 ** (shift - (places_q + places_d))
-
+    # Drop every decimal point (dividend ×10^places_dividend, divisor ×10^places_d), divide
+    # the resulting whole numbers exactly, then restore the decimal point. Dividend and
+    # divisor are scaled by different powers, so the integer quotient is 10^places_q too
+    # large; dividing by that many places gives the answer.
     trace = [
-        TraceStep(op="scale_divisor", text=f"Multiply both numbers by 10^{shift} to clear the decimal from the divisor."),
-        TraceStep(op="convert_to_integers", text=f"This turns {dividend_str} ÷ {divisor_str} into the equivalent integer division {n_int} ÷ {d_int}."),
-        TraceStep(op="compute_quotient", text=f"Divide: {n_int} ÷ {d_int} = {quotient_scaled}."),
-        TraceStep(op="place_decimal", text=f"Place the decimal point: the result is {quotient_str}."),
+        TraceStep(op="drop_decimals", text=f"Remove the decimal points and divide as whole numbers: {dividend_str} has {places_dividend} decimal place(s) and {divisor_str} has {places_d}."),
+        TraceStep(op="integer_division", text=f"Divide the whole numbers: {dividend_scaled} ÷ {divisor_scaled} = {quotient_scaled}."),
+        TraceStep(op="place_decimal", text=f"The quotient has {places_dividend} - {places_d} = {places_q} decimal place(s), so the result is {quotient_str}."),
     ]
     return make_sample(
         "arithmetic.decimal_division_by_decimal",
         f"Compute {dividend_str} ÷ {divisor_str}.",
         trace,
         quotient_str,
-        {"dividend": dividend_str, "divisor": divisor_str, "shift": shift, "difficulty": diff},
+        {"dividend": dividend_str, "divisor": divisor_str, "places_q": places_q, "places_d": places_d, "difficulty": diff},
         verified=(Decimal(dividend_str) / Decimal(divisor_str) == Decimal(quotient_str)),
     )
 

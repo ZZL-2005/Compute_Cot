@@ -1,15 +1,23 @@
-# Compute_Cot — verifiable math SFT data generator
+# Compute_Cot — 可验证、可控难度的数学推理数据生成器
 
-`mathgen` is a programmatic generator of high-quality, **auto-verified**,
-difficulty-controlled math training data. Every sample carries a step-by-step
-`<think>` derivation, a structured `trace`, a machine-readable `answer`, and is
-checked (`verified=true`) before it is allowed into a dataset. See
-[`docs/des_instruct.md`](docs/des_instruct.md) for the full specification and
-[`docs/design.md`](docs/design.md) for the symbolic-primitive taxonomy.
+`Compute_Cot` 程序化地生成**高质量、自动校验、难度可控**的数学训练数据，专门用于
+教一个**较弱的 base 模型**掌握基础算术与符号演绎能力。它不是"看起来像数学题的文本
+生成器"——每一条样本都带有：
 
-## Environment (uv, local to this directory)
+- 一段**逐步推演**的 `<think>` 过程（每行对应一个有意义的符号操作，不跳步）；
+- 一个**机器可读、可校验**的最终答案；
+- 一份**结构化 trace**（每步的算子、文本、元信息），便于统计、调试、做课程学习；
+- 一个**自动校验位** `verified=true`（用 `int`/`Fraction`/`Decimal`/`sympy` 精确验证，
+  未通过的样本在落盘前就被丢弃）。
 
-The virtualenv and the uv cache both live inside the project (per `AGENTS.md`):
+> 设计规格见 [`docs/des_instruct.md`](docs/des_instruct.md)（数据契约与丢弃规则）与
+> [`docs/design.md`](docs/design.md)（符号原语分类）。实现进度见 [`docs/PROGRESS.md`](docs/PROGRESS.md)。
+
+---
+
+## 快速上手
+
+环境（uv，安装在本目录、缓存也在本目录，见 `AGENTS.md`）：
 
 ```bash
 export UV_CACHE_DIR="$PWD/.uv_cache"
@@ -17,157 +25,159 @@ export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
 uv sync
 ```
 
-## Usage
+常用命令：
 
 ```bash
-# List every available source
+# 列出全部可用 source
 uv run python -m mathgen.cli --list-sources
 
-# Verify every generator (acceptance check)
+# 验证每个生成器都能产出合规样本（验收用）
 uv run python -m mathgen.cli --self-test --self-test-per-source 100
 
-# Generate a dataset (reproducible for a fixed --seed)
+# 生成一个数据集（固定 --seed 可复现）
 uv run python -m mathgen.cli --n 1000 --seed 7 --out data/train.jsonl
 
-# Also render the same samples as Markdown for human review
-uv run python -m mathgen.cli --n 20 --seed 7 \
-    --out data/review.jsonl --markdown-out data/review.md
+# 同时导出 Markdown 供人工抽查
+uv run python -m mathgen.cli --n 20 --seed 7 --out data/review.jsonl --markdown-out data/review.md
 
-# Generate only specific sources / a fixed difficulty
+# 只生成指定 source / 固定难度
 uv run python -m mathgen.cli --n 200 --difficulty hard \
     --sources quadratic.inequality_two_roots,inequality.linear_inequality
 ```
 
-Each generated `*.jsonl` row:
+CLI 主要参数：`--n`（条数）、`--seed`（复现）、`--sources`（逗号分隔白名单）、
+`--difficulty {easy,medium,hard,mixed}`、`--cycle`（轮询而非加权采样）、
+`--list-sources`、`--self-test`、`--trace <file>`（看数据血缘）。
+
+---
+
+## 输出格式
+
+每行一个 JSON 样本，字段固定如下：
 
 ```json
-{"source": "...", "messages": [{"role":"user",...},{"role":"assistant",...}],
- "answer": "...", "trace": [{"op":"...","text":"...","meta":{...}}],
- "metadata": {"difficulty":"..."}, "verified": true}
+{
+  "source": "arithmetic.integer_addition_carry",
+  "messages": [
+    {"role": "user", "content": "Compute 2824+859."},
+    {"role": "assistant", "content": "<think>\n...逐步推演...\n</think>\n#### \\boxed{3683}"}
+  ],
+  "answer": "3683",
+  "trace": [{"op": "add_digit", "text": "...", "before": null, "after": null, "meta": {...}}],
+  "metadata": {"difficulty": "easy", ...},
+  "verified": true
+}
 ```
 
-The assistant content always follows the single dataset-wide format:
+assistant 内容**全数据集统一**一种格式，不混用：
 
 ```
 <think>
-step by step derivation, no numbered list, no skipped steps
+逐步推演，每行一个有意义的符号操作；无编号列表；无跳步
 </think>
 #### \boxed{answer}
 ```
 
-## Generating training data
+硬约束：`<think>`/`</think>` 单独成行；`####` 后只放最终答案（不带解释）；boxed 答案
+必须等于 `answer` 字段，且必须在 `<think>` 中被真正推导出来（"无跳步"守卫）。
 
-The full pipeline produces ~575k samples across train/val/test splits with a
-5-stage curriculum and deliberate OOD (out-of-distribution) test sets.
+---
 
-```bash
-# One command to generate everything (~30 min on a modern CPU):
-bash scripts/generate_data.sh all
+## 完整数据流水线
 
-# Or generate individual splits:
-bash scripts/generate_data.sh train   # 500k training samples (5 stages)
-bash scripts/generate_data.sh val     # 25k validation samples
-bash scripts/generate_data.sh test    # 25k test samples (ID + OOD)
-```
-
-### Data split design
-
-| Split | Size | Description |
-|-------|------|-------------|
-| `data/train/s1_arithmetic.jsonl` | 150k | Integer ops, powers, radicals, order-of-ops |
-| `data/train/s2_fractions.jsonl` | 120k | Fractions, decimals, rounding, percentages |
-| `data/train/s3_algebra.jsonl` | 100k | Expression rewrite, exponent/log laws |
-| `data/train/s4_equations.jsonl` | 100k | Linear/quadratic equations & inequalities |
-| `data/train/s5_broad.jsonl` | 30k | All 260+ sources at low ratio (anti-forgetting) |
-| `data/val/val.jsonl` | 25k | Same sources, different seed |
-| `data/test/id_test.jsonl` | 10k | In-distribution test (different seed+template) |
-| `data/test/extrap_ood.jsonl` | 8k | OOD: larger digit ranges than training |
-| `data/test/template_ood.jsonl` | 7k | OOD: unseen question phrasings |
-
-### Curriculum rationale
-
-Stage order is deliberate: the model first masters single-digit arithmetic
-algorithms, then fractions/decimals, then symbolic manipulation, and finally
-full equation solving. Each stage builds on the operations learned in previous
-stages. Difficulty ramps within each stage (easy-heavy early, hard-heavy late).
-
-### OOD design
-
-- **Extrapolation**: arithmetic sources use `difficulty=hard` (5-6 digit operands)
-  vs the predominantly easy/medium training distribution.
-- **Template OOD**: questions are rephrased with templates never used in training
-  (e.g. "Work out X", "Tell me the result of X") to test template-level
-  generalisation rather than memorisation of specific prefixes.
-
-## Implemented domains (268 sources, 199 design.md spec items)
-
-| domain | sources | coverage |
-|--------|---------|----------|
-| `arithmetic` | 28 | integer ops (carry/borrow), long mult/div, fractions, decimals, powers, radicals, order-of-ops, rounding, scientific notation |
-| `expression_rewrite` | 11 | collect like terms, distribute, expand (binomial + perfect square), factor (monic, a≠1, difference-of-squares), exponent/rational/radical/absolute-value simplify |
-| `equation` | 12 | one-/multi-step linear, parentheses, variable-on-both-sides, fraction-coeff, 2×2 systems (elimination + substitution), quadratic formula, completing the square, rational/radical/absolute-value equations |
-| `inequality` | 6 | linear (sign-flip), compound, rational, absolute-value, exponential, logarithmic |
-| `quadratic` | 9 | equation-factor, inequalities (two-roots, double-root, no-root), discriminant classification, vertex/axis/range, sign-chart, positive/negative intervals, parameter-discriminant |
-| `function` | 9 | evaluation, composite, piecewise, domain, range, inverse, zero, sign, transformation |
-| `trigonometry` + `trigonometric_schema` | 12 | special-angle-values (unit-circle derivation), quadrant-sign (CAST), periodicity, Pythagorean identity, simplification, equations, general solutions |
-| `exp_log` | 9 | exponent laws, negative/fractional exponents, exponential/log equations, log definition/laws/domain, inverse |
-| `sequences` + `sequence_schema` | 13 | arithmetic/geometric nth-term and series-sum, recurrence, sigma-notation, telescoping |
-| `number_theory` | 7 | parity, divisibility-rules, prime-factorization, gcd/lcm, Euclidean algorithm, modular-arithmetic, integer-factor-pairs |
-| `comparison` | 8 | integer/fraction/decimal/radical/power comparison, sign-of-expression, approximate-value, bound-reasoning |
-| `set_logic` | 9 | membership, subset, union/intersection, complement, interval-ops, logic connectives, implication, quantifiers |
-| `domain_assumption` | 7 | denominator, radical, log, tangent, square-both-sides, multiply-by-expression, solution-verification |
-| `case_split` | 6 | sign, zero-points, absolute-value, piecewise-condition, parameter, merge-results |
-| `combinatorics` | 10 | permutation, combination, counting-principle, binomial-coefficient, probability, conditional, independent-events, expectation, mean/median/mode, variance |
-| `complex` | 8 | imaginary-unit, add/sub, multiply, division, conjugate, modulus, argument, equation |
-| `vectors` | 8 | add/sub, scalar-mult, dot-product, norm, angle, projection, parallel/perpendicular, linear-combination |
-| `matrices` | 7 | add/sub, scalar-mult, matrix-mult, det-2×2, det-3×3, inverse-2×2, Cramer's-rule |
-| `polynomial` | 7 | degree, synthetic-division, remainder-theorem, factor-theorem, Vieta, rational-root-test, higher-degree-factor |
-| `analytic_geometry` + schema | 16 | distance, midpoint, slope, line-equation, point-line-distance, circle-equation, line-circle-intersection, conic-classification, tangent-line |
-| `differentiation` + `derivative_schema` | 14 | power-rule, sum/product/quotient/chain-rule, derivative-simplification, tangent-line, monotonicity, critical-points, local/closed-interval extrema |
-| `limits` | 2 | direct-substitution, factor-cancel |
-| `integration` | 2 | power-integral, definite-integral |
-| `plane_geometry` | 8 | triangle/rectangle/circle area/perimeter, Pythagorean, similar-triangles, angle-sum, polygon-angle-sum, sector |
-| `word_problem` | 14 | part-whole, state-change, comparison, multiplicative, sum-difference, price-quantity, rate-time-distance, work-rate, percent, average, age, mixture, geometry, two-variable-linear |
-| `ratio_percent` | 8 | ratio-simplify, proportion, percent-to-fraction/decimal, percent-change, direct/inverse-proportion, rate-unit-conversion |
-
-Verification (`mathgen/verify.py`) uses exact arithmetic (`int`, `Fraction`,
-`Decimal`) and `sympy` for symbolic equivalence and inequality solution sets.
-Sample-level discard rules (`mathgen/validate.py`) reject anything that fails
-verification, has an empty trace/answer, a numbered list, a dirty renderer
-fragment, a boxed answer that disagrees with the `answer` field, or a boxed
-answer that is **not actually derived in the reasoning** (the "no skipped steps"
-guard: the final answer must appear in the `<think>` derivation).
-
-## Data lineage
-
-Every produced file is traceable one level up and one level down (`AGENTS.md`):
-
-* `<file>.jsonl.lineage.json` — sidecar: producer (tool, version, git commit,
-  command, seed, config, sources, code modules), upstream `inputs` (the spec
-  docs), and the growing list of downstream `consumed_by` entries.
-* Markdown previews written with `--markdown-out` also receive a lineage sidecar
-  and record the source JSONL as an upstream input.
-* `data/lineage/manifest.jsonl` — append-only log of every produce/consume event.
+`scripts/generate_data.sh` 给出一套现成的 5 阶段课程 + 故意构造的 OOD 测试集
+（约 575k 样本）：
 
 ```bash
-# Inspect provenance of a file
-uv run python -m mathgen.cli --trace data/train.jsonl
-
-# Record that a downstream step consumed a file
-uv run python -m mathgen.cli --out data/train.jsonl --consumed-by train_sft.py
+bash scripts/generate_data.sh all     # 全部
+bash scripts/generate_data.sh train   # 仅训练集（5 阶段）
+bash scripts/generate_data.sh val     # 验证集
+bash scripts/generate_data.sh test    # 测试集（ID + OOD）
 ```
 
-## Project layout
+| split | 规模 | 说明 |
+|-------|------|------|
+| `train/s1_arithmetic` | 150k | 整数四则、乘方、根式、运算顺序 |
+| `train/s2_fractions` | 120k | 分数小数、化简、换算、百分比 |
+| `train/s3_algebra` | 100k | 表达式变形、指对律 |
+| `train/s4_equations` | 100k | 一/二次方程与不等式 |
+| `train/s5_broad` | 30k | 全部 source 低比例混入（防遗忘） |
+| `val/val` | 25k | 同源不同 seed |
+| `test/id_test` | 10k | 分布内泛化 |
+| `test/extrap_ood` | 8k | 数值范围外推（更大位数） |
+| `test/template_ood` | 7k | 训练未见过的问法模板 |
+
+> 注：`generate_data.sh` 默认配比是手工硬编码的"按主题分桶"，并**不含跨 split 去重**；
+> 不同 split 仅靠不同 seed 区分，小空间题目可能产生重合。若用于严格评测，请在生成后
+> 自行做全局去重与无泄漏切分。下游若需"难度爬升 / 动态配比"，应在训练采样侧实现——
+> 生成器只负责提供打好标签、可寻址（按 `source`/`difficulty`/`trace`）的素材池。
+
+---
+
+## 已实现领域（268 sources）
+
+涵盖 arithmetic / expression_rewrite / equation / inequality / quadratic / function /
+trigonometry / exp_log / sequences / number_theory / comparison / set_logic /
+domain_assumption / case_split / combinatorics / complex / vectors / matrices /
+polynomial / analytic_geometry / differentiation / limits / integration /
+plane_geometry / word_problem / ratio_percent，以及若干 `*_schema`（结构化题型）。
+完整 source 名用 `--list-sources` 查看，逐领域覆盖见 `docs/PROGRESS.md`。
+
+---
+
+## 代码结构
 
 ```
 mathgen/
-  core.py          # TraceStep / Sample / make_sample, JSON encoding
-  formatting.py    # the single shared expression formatter (no ad-hoc strings)
-  config.py        # Difficulty levels, GenConfig
-  verify.py        # sympy-backed verification helpers
-  validate.py      # des_instruct.md sec 9 discard rules
-  lineage.py       # data provenance (up/down one level)
-  registry.py      # merges domain registries, sampling, self-test
-  cli.py           # command-line entry point
-  domains/         # one module per domain, each exposing REGISTRY
+  cli.py           # 命令行入口：采样 → 校验 → 写 JSONL + 血缘
+  registry.py      # 合并各领域 REGISTRY，驱动采样、self-test
+  config.py        # 难度档位、GenConfig
+  core.py          # TraceStep / Sample / make_sample，JSON 编码
+  formatting.py    # 唯一的表达式渲染助手（禁止到处手写字符串拼接）
+  verify.py        # sympy / 精确算术的校验工具
+  validate.py      # des_instruct.md 第 9 节的丢弃规则
+  lineage.py       # 数据血缘（上下各一层可追溯）
+  domains/         # 每个领域一个模块，各自暴露 REGISTRY
+scripts/
+  generate_data.sh # 全流水线生成脚本
+  check_sources.py # 验收：全 source 跑 verify + validate + 脏片段扫描
+  generate_ood.py  # OOD 测试集生成
+  apply_templates.py / review_*.py # 模板与人工复查辅助
+```
+
+### 新增一个 source
+
+1. 在 `mathgen/domains/<领域>.py` 写一个 `gen_xxx(rng, cfg) -> Sample`，**所有渲染走
+   `formatting.py` 的助手**（不要手写字符串拼接），推演要逐步、可被 `verify.py` 校验；
+2. 注册进该模块的 `REGISTRY`（并确保 `registry.py` 引入了该模块）；
+3. 跑验收，必须全 PASS：
+   ```bash
+   uv run python scripts/check_sources.py        # verify=0 / validate=0 / blemish=0
+   ```
+
+---
+
+## 质量保证
+
+- **逐样本自动校验**：算术用 `int`/`Fraction`/`Decimal` 精确计算，符号/方程/不等式/
+  导数用 `sympy`；校验失败、空 trace/答案、脏片段、跳步、答案与 boxed 不一致等一律丢弃
+  （规则见 `docs/des_instruct.md` 第 9 节）。
+- **验收脚本** `scripts/check_sources.py` 对全部 268 source 跑 verify + validate +
+  脏片段扫描，三项全 0 才算通过。
+- **已知局限**：答案级 verify 不保证 `<think>` 中途每一步都对——历史上出现过"答案对、
+  过程错"的渲染缺陷（如 decimal 除法的假整数商、分数除法负号断层、分段函数 `+ -` 脏片段，
+  均已修复）。建议下游对生成器再补一层**步级数值核算**与**符号/边界定向探测**，因为随机
+  抽样会漏掉只在特定符号/边界触发的缺陷。
+
+---
+
+## 数据血缘
+
+每个产出文件都可上下各追溯一层：`<file>.jsonl.lineage.json` 记录生产者（工具、版本、
+git commit、命令、seed、配置、source、代码模块）与上游 `inputs`、下游 `consumed_by`；
+`data/lineage/manifest.jsonl` 是 append-only 的全量产/用事件日志。
+
+```bash
+uv run python -m mathgen.cli --trace data/train.jsonl              # 看某文件的血缘
+uv run python -m mathgen.cli --out data/train.jsonl --consumed-by train_sft.py  # 记录下游消费
 ```

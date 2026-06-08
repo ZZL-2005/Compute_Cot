@@ -14,7 +14,7 @@ import sympy as sp
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_factor, fmt_interval, fmt_union
+from mathgen.formatting import fmt_factor, fmt_interval, fmt_mul, fmt_poly, fmt_union
 from mathgen.verify import X, interval_set, sets_equal
 
 
@@ -160,24 +160,36 @@ def gen_split_by_piecewise_condition(rng: random.Random, cfg: GenConfig) -> Samp
     a2, b2 = rng.randint(-hi, hi), rng.randint(-hi, hi)
     x0 = rng.randint(-hi, hi)
 
+    # Render every linear piece through fmt_poly so coefficient 1/0 and negative
+    # constants come out clean ("x - 6", "0", not "1x + -6").
+    piece1 = fmt_poly([(a1, 1), (b1, 0)])
+    piece2 = fmt_poly([(a2, 1), (b2, 0)])
+
     if x0 < c:
-        branch = "x < " + str(c)
-        val = a1 * x0 + b1
-        rule = f"{a1}x + {b1}" if b1 >= 0 else f"{a1}x - {abs(b1)}"
+        branch, rule, a, b = "x < " + str(c), piece1, a1, b1
     else:
-        branch = "x ≥ " + str(c)
-        val = a2 * x0 + b2
-        rule = f"{a2}x + {b2}" if b2 >= 0 else f"{a2}x - {abs(b2)}"
+        branch, rule, a, b = "x ≥ " + str(c), piece2, a2, b2
+    val = a * x0 + b
+
+    if a == 0:
+        eval_text = f"On this branch f(x) = {rule} is constant, so f({x0}) = {val}."
+    else:
+        sub = fmt_mul(a, x0)
+        if b > 0:
+            sub += f" + {b}"
+        elif b < 0:
+            sub += f" - {abs(b)}"
+        eval_text = f"Substitute x = {x0} into f(x) = {rule}: f({x0}) = {sub} = {val}."
 
     trace = [
         TraceStep(op="identify_condition", text=f"The function is defined piecewise with split point x = {c}."),
         TraceStep(op="check_condition", text=f"For x = {x0}, check: {x0} {'<' if x0 < c else '≥'} {c}, so use the branch for {branch}."),
-        TraceStep(op="evaluate_branch", text=f"Evaluate f(x) = {rule} at x = {x0}: f({x0}) = {val}."),
+        TraceStep(op="evaluate_branch", text=eval_text),
         TraceStep(op="finish", text=f"So f({x0}) = {val}.", after=str(val)),
     ]
     return make_sample(
         "case_split.split_by_piecewise_condition",
-        f"Let f(x) = {a1}x + {b1} for x < {c}, and f(x) = {a2}x + {b2} for x ≥ {c}. Find f({x0}).",
+        f"Let f(x) = {piece1} for x < {c}, and f(x) = {piece2} for x ≥ {c}. Find f({x0}).",
         trace,
         str(val),
         {"c": c, "x0": x0, "branch": branch, "difficulty": diff},
