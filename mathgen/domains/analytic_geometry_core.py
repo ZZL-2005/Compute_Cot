@@ -238,7 +238,8 @@ def gen_conic_basic(rng: random.Random, cfg: GenConfig) -> Sample:
     trace = [
         TraceStep(op="inspect_form", text=f"Look at the equation {eq}."),
         TraceStep(op="apply_rule", text=f"This is a {kind} because {reason}."),
-        TraceStep(op="finish", text=f"So the conic is a {kind}.", after=kind),
+        article = "an" if kind[0] in "aeiou" else "a"
+        TraceStep(op="finish", text=f"So the conic is {article} {kind}.", after=kind),
     ]
     return make_sample(
         "analytic_geometry.conic_basic",
