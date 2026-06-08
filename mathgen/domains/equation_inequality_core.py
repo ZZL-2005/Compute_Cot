@@ -68,7 +68,7 @@ def gen_one_step_linear(rng: random.Random, cfg: GenConfig) -> Sample:
         sol = Fraction(rng.randint(-hi, hi))
         c = a * sol
         trace = [
-            TraceStep(op="isolate_variable", text=f"Divide both sides of {a}x = {fmt_value(c)} by {a}."),
+            TraceStep(op="isolate_variable", text=f"To isolate x, divide both sides of {a}x = {fmt_value(c)} by {a}."),
             TraceStep(op="simplify", text=f"This gives x = {fmt_value(c)}/{a} = {fmt_fraction(sol)}."),
             TraceStep(op="state_solution", text=f"So the solution is {_ans_eq(sol)}.", after=_ans_eq(sol)),
         ]

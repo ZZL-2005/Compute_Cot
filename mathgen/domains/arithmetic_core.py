@@ -368,21 +368,39 @@ def gen_long_multiplication(rng: random.Random, cfg: GenConfig) -> Sample:
     b = randint_digits(rng, b_digits)
     result = a * b
 
-    trace: List[TraceStep] = [TraceStep(op="decompose_multiplier", text=f"Break the multiplier {b} into place-value digits and compute one partial product at a time.")]
+    trace: List[TraceStep] = [TraceStep(op="decompose_multiplier", text=f"Break the multiplier {b} into place-value digits. Compute partial products for each digit position, then sum them.", meta={"a": a, "b": b})]
     partials: List[int] = []
     for pos, ch in enumerate(str(b)[::-1]):
         digit = int(ch)
-        partial_raw, detail, meta_steps = multiply_by_digit_trace(a, digit)
+        # Compute digit-sub-steps and emit as individual TraceSteps.
+        trace.append(TraceStep(op="start_partial", text=f"--- Partial product for the {place_name(pos)} digit {digit}: compute {a}×{digit} ---"))
+        carry = 0
+        partial_digits: List[int] = []
+        for i, dch in enumerate(str(a)[::-1]):
+            da = int(dch)
+            incoming = carry
+            prod = da * digit + incoming
+            write = prod % 10
+            carry = prod // 10
+            partial_digits.append(write)
+            if carry:
+                text = f"  {place_name(i)}: {da}×{digit}{' + ' + str(incoming) if incoming else ''} = {prod}, write {write}, carry {carry}"
+            else:
+                text = f"  {place_name(i)}: {da}×{digit}{' + ' + str(incoming) if incoming else ''} = {prod}, write {write}"
+            trace.append(TraceStep(op="multiply_digit", text=text, meta={"place": i, "a_digit": da, "digit": digit, "product": prod, "write": write, "carry": carry}))
+        if carry:
+            partial_digits.append(carry)
+            trace.append(TraceStep(op="final_carry", text=f"  Final carry {carry} goes to the front."))
+        partial_raw = int("".join(map(str, partial_digits[::-1])))
         shifted = partial_raw * (10**pos)
-        partials.append(shifted)
         if pos == 0:
-            text = f"For the {place_name(pos)} digit {digit}, compute {a}×{digit}: {detail}. The partial product is {partial_raw}."
+            trace.append(TraceStep(op="partial_result", text=f"Partial product for the {place_name(pos)} digit: {partial_raw}.", meta={"raw": partial_raw}))
         else:
             zeros = "zero" if pos == 1 else "zeros"
-            text = f"For the {place_name(pos)} digit {digit}, compute {a}×{digit}: {detail}. Because this digit is in the {place_name(pos)} place, append {pos} {zeros}, giving partial product {shifted}."
-        trace.append(TraceStep(op="partial_product", text=text, meta={"position": pos, "digit": digit, "raw_partial": partial_raw, "shifted_partial": shifted, "digit_steps": meta_steps}))
-    trace.append(TraceStep(op="sum_partial_products", text=f"Add the partial products: {'+'.join(map(str, partials))}={result}."))
-    trace.append(TraceStep(op="finish", text=f"Therefore, {a}×{b}={result}."))
+            trace.append(TraceStep(op="shift_and_result", text=f"Because this digit is in the {place_name(pos)} place, append {pos} {zeros} to {partial_raw}, giving {shifted}.", meta={"raw": partial_raw, "shifted": shifted}))
+        partials.append(shifted)
+    trace.append(TraceStep(op="sum_partial_products", text=f"Sum the partial products: {' + '.join(map(str, partials))} = {result}.", meta={"partials": partials, "result": result}))
+    trace.append(TraceStep(op="finish", text=f"Therefore, {a}×{b}={result}.", after=str(result)))
     return make_sample(
         "arithmetic.long_multiplication",
         f"Compute {a}×{b}.",
@@ -496,8 +514,16 @@ def gen_fraction_simplification(rng: random.Random, cfg: GenConfig) -> Sample:
     den = base.denominator * scale
     g = math.gcd(abs(num), abs(den))
     simplified = Fraction(num, den)
+    # Show the GCD derivation, not just the result.
+    a_abs, b_abs = abs(num), abs(den)
+    if g == 1:
+        gcd_text = f"Find gcd({a_abs},{b_abs}). Since they share no common factors, gcd = 1. The fraction is already in lowest terms."
+    elif g <= 10:
+        gcd_text = f"Find gcd({a_abs},{b_abs}). Both numbers are divisible by {g}, and no larger number divides both, so gcd = {g}."
+    else:
+        gcd_text = f"Find gcd({a_abs},{b_abs}) using the Euclidean algorithm: {a_abs}÷{b_abs} = {a_abs//b_abs} remainder {a_abs % b_abs}; ... ; so gcd = {g}."
     trace = [
-        TraceStep(op="find_gcd", text=f"Find the greatest common divisor of {abs(num)} and {abs(den)}. It is {g}."),
+        TraceStep(op="find_gcd", text=gcd_text),
         TraceStep(op="divide_by_gcd", text=f"Divide numerator and denominator by {g}: {num}/{den}=({num}÷{g})/({den}÷{g})={fmt_fraction(simplified)}."),
     ]
     return make_sample(
@@ -518,6 +544,7 @@ def gen_fraction_add_sub(rng: random.Random, cfg: GenConfig, op: str) -> Sample:
     n1, d1 = raw_fraction_from_fraction(f1, rng, max_scale=3)
     n2, d2 = raw_fraction_from_fraction(f2, rng, max_scale=3)
     lcm = abs(d1 * d2) // math.gcd(d1, d2)
+    g = math.gcd(d1, d2)
     m1 = lcm // d1
     m2 = lcm // d2
     e1 = n1 * m1
@@ -534,8 +561,13 @@ def gen_fraction_add_sub(rng: random.Random, cfg: GenConfig, op: str) -> Sample:
         source = "arithmetic.fraction_subtraction"
         user = f"Compute {fmt_raw_fraction(n1, d1)} - {paren_if_negative(fmt_raw_fraction(n2, d2))}."
         combine_text = f"Subtract the numerators: {fmt_sub(e1, e2)}={raw_num}, so the result before simplification is {fmt_raw_fraction(raw_num, lcm)}."
+    # Build the LCM explanation depending on whether denominators share a factor.
+    if g == 1:
+        lcm_text = f"The denominators {d1} and {d2} are coprime, so the common denominator is their product: lcm = {d1}×{d2} = {lcm}."
+    else:
+        lcm_text = f"Find the common denominator: lcm({d1},{d2}) = {d1}×{d2}÷gcd({d1},{d2}) = {d1}×{d2}÷{g} = {lcm}."
     trace = [
-        TraceStep(op="find_common_denominator", text=f"Use common denominator lcm({d1},{d2})={lcm}."),
+        TraceStep(op="find_common_denominator", text=lcm_text),
         TraceStep(op="convert_first_fraction", text=f"Convert {fmt_raw_fraction(n1, d1)} to denominator {lcm}: multiply numerator and denominator by {m1}, giving {e1}/{lcm}."),
         TraceStep(op="convert_second_fraction", text=f"Convert {fmt_raw_fraction(n2, d2)} to denominator {lcm}: multiply numerator and denominator by {m2}, giving {e2}/{lcm}."),
         TraceStep(op="combine_numerators", text=combine_text),
