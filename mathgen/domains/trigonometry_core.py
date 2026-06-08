@@ -79,9 +79,38 @@ def gen_special_angle_values(rng: random.Random, cfg: GenConfig) -> Sample:
     while value is None or value == "undefined":
         deg = rng.choice(pool)
         value = exact_trig(func, deg)
+
+    # Teach the unit-circle derivation, not just the memorized value.
+    unit_circle_explanations = {
+        0: "On the unit circle, 0° is at (1, 0).",
+        30: "At 30°, use the 30-60-90 triangle: sides 1, √3, 2 → point (√3/2, 1/2).",
+        45: "At 45°, use the 45-45-90 triangle: sides 1, 1, √2 → point (√2/2, √2/2).",
+        60: "At 60°, use the 30-60-90 triangle: sides √3, 1, 2 → point (1/2, √3/2).",
+        90: "On the unit circle, 90° is at (0, 1).",
+        120: "At 120° (quadrant II), the reference angle is 60°. Cosine is negative, sine is positive: point (-1/2, √3/2).",
+        135: "At 135° (quadrant II), the reference angle is 45°. Both coordinates flipped in sign: point (-√2/2, √2/2).",
+        150: "At 150° (quadrant II), the reference angle is 30°. Cosine is negative, sine is positive: point (-√3/2, 1/2).",
+        180: "On the unit circle, 180° is at (-1, 0).",
+        210: "At 210° (quadrant III), the reference angle is 30°. Both coordinates negative: point (-√3/2, -1/2).",
+        225: "At 225° (quadrant III), the reference angle is 45°. Both coordinates negative: point (-√2/2, -√2/2).",
+        240: "At 240° (quadrant III), the reference angle is 60°. Both coordinates negative: point (-1/2, -√3/2).",
+        270: "On the unit circle, 270° is at (0, -1).",
+        300: "At 300° (quadrant IV), the reference angle is 60°. Cosine positive, sine negative: point (1/2, -√3/2).",
+        315: "At 315° (quadrant IV), the reference angle is 45°. Cosine positive, sine negative: point (√2/2, -√2/2).",
+        330: "At 330° (quadrant IV), the reference angle is 30°. Cosine positive, sine negative: point (√3/2, -1/2).",
+        360: "On the unit circle, 360° is at (1, 0), same as 0°.",
+    }
+    func_explanations = {
+        "sin": "sin is the y-coordinate",
+        "cos": "cos is the x-coordinate",
+        "tan": "tan = sin/cos = y/x",
+    }
+    geom_hint = unit_circle_explanations.get(deg, f"On the unit circle, {deg}° has a known coordinate.")
+    func_hint = func_explanations[func]
+
     trace = [
-        TraceStep(op="recall", text=f"{deg}° is a special angle, so {func}({deg}°) has a known exact value from the unit circle."),
-        TraceStep(op="state_value", text=f"{func}({deg}°) = {value}."),
+        TraceStep(op="unit_circle", text=geom_hint),
+        TraceStep(op="coordinate", text=f"{func_hint}, so {func}({deg}°) = {value}."),
         TraceStep(op="finish", text=f"So {func}({deg}°) = {value}.", after=value),
     ]
     return make_sample(

@@ -180,6 +180,8 @@ def gen_multiply_by_expression(rng: random.Random, cfg: GenConfig) -> Sample:
     # Equation: b = c * (x - a) for x ≠ a
     # After multiplying: b = c(x - a) → x = b/c + a (if c ≠ 0)
     b = rng.randint(-20, 20)
+    while b == 0:  # ensure nonzero numerator for meaningful fraction
+        b = rng.randint(-20, 20)
     c_val = rng.choice([1, -1, 2, -2, 3, -3])
     # Solve: b = c*(x - a) → x - a = b/c → x = a + b/c
     rhs = Fraction(b, c_val)

@@ -153,9 +153,33 @@ def gen_factor_trinomial(rng: random.Random, cfg: GenConfig) -> Sample:
     c = p * q
     expr_str = fmt_poly([(1, 2), (b, 1), (c, 0)])
     answer = f"{fmt_factor(p)}{fmt_factor(q)}"
+
+    # Show the search strategy, not just the result.
+    search_steps = []
+    abs_c = abs(c)
+    # List a few factor pairs of |c| to illustrate the search.
+    pairs = []
+    for d in range(1, int(abs_c**0.5) + 1):
+        if abs_c % d == 0:
+            pairs.append((d, abs_c // d))
+    sample_pairs = pairs[:3]  # show up to 3 pairs
+    if len(pairs) > 3:
+        pair_text = ", ".join(f"({a},{b})" for a, b in sample_pairs) + ", ..."
+    else:
+        pair_text = ", ".join(f"({a},{b})" for a, b in sample_pairs)
+
+    # Determine signs: if c>0, both same sign (sign of b). If c<0, opposite signs.
+    if c > 0 and b < 0:
+        sign_hint = "Since c>0 and b<0, both numbers must be negative."
+    elif c > 0 and b > 0:
+        sign_hint = "Since c>0 and b>0, both numbers are positive."
+    else:
+        sign_hint = "Since c<0, one number is positive and the other is negative."
+
     trace = [
         TraceStep(op="set_up_factoring", text=f"Look for two numbers whose product is {c} and whose sum is {b}."),
-        TraceStep(op="find_factor_pair", text=f"The numbers {p} and {q} work because {fmt_mul(p, q)}={c} and {fmt_add(p, q)}={b}.", meta={"p": p, "q": q, "product": c, "sum": b}),
+        TraceStep(op="list_factor_pairs", text=f"Factor pairs of |{c}|: {pair_text}. {sign_hint}"),
+        TraceStep(op="find_factor_pair", text=f"Testing: {fmt_mul(p, q)}={c} ✓ and {fmt_add(p, q)}={b} ✓. The numbers are {p} and {q}.", meta={"p": p, "q": q, "product": c, "sum": b}),
         TraceStep(op="write_factors", text=f"Therefore {expr_str}={answer}.", after=answer),
     ]
     return make_sample(
@@ -182,8 +206,9 @@ def gen_exponent_product(rng: random.Random, cfg: GenConfig) -> Sample:
     expr_str = f"{left} × {right}"
     answer = f"{coef}x^{power}" if power > 1 else f"{coef}x"
     trace = [
-        TraceStep(op="multiply_coefficients", text=f"Multiply the coefficients: {a}×{b}={coef}.", meta={"a": a, "b": b, "coef": coef}),
-        TraceStep(op="add_exponents", text=f"Add the exponents of x: x^{m}×x^{n}=x^({m}+{n})=x^{power}.", meta={"m": m, "n": n, "power": power}),
+        TraceStep(op="state_rule", text="Use the product law: a·x^m × b·x^n = (a·b)·x^(m+n)."),
+        TraceStep(op="multiply_coefficients", text=f"Here a={a}, b={b}, so a·b = {coef}.", meta={"a": a, "b": b, "coef": coef}),
+        TraceStep(op="add_exponents", text=f"Here m={m}, n={n}, so x^{m}×x^{n}=x^({m}+{n})=x^{power}.", meta={"m": m, "n": n, "power": power}),
         TraceStep(op="finish", text=f"Therefore {expr_str}={answer}.", after=answer),
     ]
     return make_sample(
@@ -229,10 +254,11 @@ def gen_radical_simplify(rng: random.Random, cfg: GenConfig) -> Sample:
     a2, _ = sqrt_simplify(n2)
     total = a1 + a2
     answer = fmt_radical(total, base)
+    # Show the factorization: sqrt(N) = sqrt(k²·base) = k·sqrt(base).
     trace = [
-        TraceStep(op="simplify_first", text=f"Simplify the first radical: sqrt({n1}) = {fmt_radical(a1, base)}."),
-        TraceStep(op="simplify_second", text=f"Simplify the second radical: sqrt({n2}) = {fmt_radical(a2, base)}."),
-        TraceStep(op="combine_like", text=f"Both have sqrt({base}), so add coefficients: {a1} + {a2} = {total}."),
+        TraceStep(op="simplify_first", text=f"Simplify sqrt({n1}): factor {n1} = {a1}²×{base}, so sqrt({n1}) = sqrt({a1}²×{base}) = {a1}sqrt({base}).", meta={"n": n1, "outside": a1, "inside": base}),
+        TraceStep(op="simplify_second", text=f"Simplify sqrt({n2}): factor {n2} = {a2}²×{base}, so sqrt({n2}) = sqrt({a2}²×{base}) = {a2}sqrt({base}).", meta={"n": n2, "outside": a2, "inside": base}),
+        TraceStep(op="combine_like", text=f"Both terms now have sqrt({base}). Add their coefficients: {a1} + {a2} = {total}.", meta={"a1": a1, "a2": a2, "total": total}),
         TraceStep(op="finish", text=f"So sqrt({n1}) + sqrt({n2}) = {answer}.", after=answer),
     ]
     return make_sample(
@@ -362,10 +388,13 @@ def gen_expand_perfect_square(rng: random.Random, cfg: GenConfig) -> Sample:
     expr_str = f"({fmt_linear(a, b)})^2"
     answer = fmt_poly([(a_sq, 2), (two_ab, 1), (b_sq, 0)])
 
+    # Clean variable naming: avoid "(x)" and "1x²" when a=1.
+    p_str = "x" if a == 1 else f"{a}x"
+    p_sq_str = "x²" if a == 1 else f"{a_sq}x²"
     trace = [
-        TraceStep(op="state_formula", text=f"Use (P ± Q)² = P² ± 2PQ + Q² with P = {fmt_linear(a, 0)}, Q = {abs(b)}."),
-        TraceStep(op="square_first", text=f"P² = ({fmt_linear(a, 0)})² = {a_sq}x².", meta={"a_sq": a_sq}),
-        TraceStep(op="double_product", text=f"2PQ = 2 × {fmt_linear(a, 0)} × {paren_if_negative(b)} = {two_ab}x.", meta={"two_ab": two_ab}),
+        TraceStep(op="state_formula", text=f"Use (P ± Q)² = P² ± 2PQ + Q² with P = {p_str}, Q = {abs(b)}."),
+        TraceStep(op="square_first", text=f"P² = ({p_str})² = {p_sq_str}.", meta={"a_sq": a_sq}),
+        TraceStep(op="double_product", text=f"2PQ = 2 × {p_str} × {paren_if_negative(b)} = {two_ab}x.", meta={"two_ab": two_ab}),
         TraceStep(op="square_second", text=f"Q² = {paren_if_negative(b)}² = {b_sq}.", meta={"b_sq": b_sq}),
         TraceStep(op="finish", text=f"Combine: {answer}.", after=answer),
     ]
