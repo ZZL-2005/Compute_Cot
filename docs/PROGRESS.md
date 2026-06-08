@@ -29,9 +29,9 @@
 | 17 complex | ✅ 完成 | complex_core | 8 source |
 | 18 vectors | ✅ 完成 | vectors_core | 8 source |
 | 19 matrices | ✅ 完成 | matrices_core | 7 source |
-| 20 combinatorics/prob/stats | ⬜ 待做 | combinatorics_core | |
-| 21 plane_geometry | ⬜ 待做 | geometry_formula_core | |
-| 22 polynomial_advanced | ⬜ 待做 | polynomial_advanced_core | |
+| 20 combinatorics/prob/stats | ✅ 完成 | combinatorics_core | 10 source |
+| 21 plane_geometry | ✅ 完成 | geometry_formula_core | 8 source |
+| 22 polynomial_advanced | ✅ 完成 | polynomial_advanced_core | 7 source |
 | 23 limits | ✅ 最简完成 | calculus_core | direct_substitution + factor_cancel |
 | 24 integration | ✅ 最简完成 | calculus_core | power_integral + definite_basic |
 | 25 quadratic schema | ✅ 完成 | quadratic_schema | |
@@ -57,3 +57,4 @@
 - 2026-06-08 批次2: trigonometry(6) + analytic_geometry(8) + calculus_core(微分8 + 极限2 + 积分2)。
   全部 PASS。sources: 84 → 110。
 - 2026-06-08 批次3: complex(8) + vectors(8) + matrices(7)。全部 PASS。sources: 110 → 133。
+- 2026-06-08 批次4: combinatorics(10) + plane_geometry(8) + polynomial_advanced(7)。全部 PASS。sources: 133 → 158。
