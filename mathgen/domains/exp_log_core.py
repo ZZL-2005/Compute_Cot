@@ -15,7 +15,7 @@ from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_fraction, fmt_interval, paren_if_negative
+from mathgen.formatting import fmt_fraction, fmt_interval, ordinal, paren_if_negative
 
 
 def gen_exponent_laws(rng: random.Random, cfg: GenConfig) -> Sample:
@@ -72,7 +72,7 @@ def gen_fractional_exponent(rng: random.Random, cfg: GenConfig) -> Sample:
     result = inner**m
     trace = [
         TraceStep(op="state_rule", text=f"A fractional exponent is a root then a power: a^(m/n) = (n-th root of a)^m."),
-        TraceStep(op="take_root", text=f"Here the {root}th root of {base} is {inner}, because {inner}^{root} = {base}."),
+        TraceStep(op="take_root", text=f"Here the {ordinal(root)} root of {base} is {inner}, because {inner}^{root} = {base}."),
         TraceStep(op="apply_power", text=f"So {base}^({m}/{root}) = {inner}^{m}."),
         TraceStep(op="evaluate", text=f"Evaluate {inner}^{m} = {result}."),
         TraceStep(op="finish", text=f"So {base}^({m}/{root}) = {result}.", after=str(result)),

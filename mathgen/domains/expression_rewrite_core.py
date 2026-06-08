@@ -298,8 +298,8 @@ def gen_factor_trinomial_a_not_1(rng: random.Random, cfg: GenConfig) -> Sample:
 
     trace = [
         TraceStep(op="set_up_factoring", text=f"Factor {expr_str}. Look for two binomials whose product gives a={a}, c={c_coef}, and cross-terms sum to b={b_coef}."),
-        TraceStep(op="find_ac_pairs", text=f"The coefficient of x² is {a}={p}×{r} and the constant is {c_coef}={q}×{s}."),
-        TraceStep(op="check_cross_terms", text=f"Check the cross terms: {fmt_mul(p, s)} + {fmt_mul(q, r)} = {p * s} + {q * r} = {b_coef}. This matches."),
+        TraceStep(op="find_ac_pairs", text=f"The coefficient of x² is {a}={fmt_mul(p, r)} and the constant is {c_coef}={fmt_mul(q, s)}."),
+        TraceStep(op="check_cross_terms", text=f"Check the cross terms: {fmt_mul(p, s)} + {fmt_mul(q, r)} = {fmt_add(p * s, q * r)} = {b_coef}. This matches."),
         TraceStep(op="write_factors", text=f"So {expr_str} = {answer}.", after=answer),
     ]
     return make_sample(

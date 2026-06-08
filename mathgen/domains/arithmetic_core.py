@@ -26,6 +26,7 @@ from mathgen.formatting import (
     fmt_radical,
     fmt_raw_fraction,
     fmt_sub,
+    ordinal,
     paren_if_negative,
     parse_decimal_string,
     place_name,
@@ -748,7 +749,11 @@ def gen_powers(rng: random.Random, cfg: GenConfig) -> Sample:
     exponent = rng.randint(0, {Difficulty.EASY: 4, Difficulty.MEDIUM: 5, Difficulty.HARD: 6}[diff])
     result = base**exponent
     if exponent == 0:
-        trace = [TraceStep(op="zero_exponent", text=f"Any nonzero number to the power 0 equals 1, so {paren_if_negative(base)}^0=1.")]
+        trace = [
+            TraceStep(op="state_rule", text="Recall the zero exponent rule: any nonzero number raised to the power 0 equals 1.", meta={"rule": "a^0 = 1 for a ≠ 0"}),
+            TraceStep(op="apply_rule", text=f"Here the base is {paren_if_negative(base)}, which is nonzero."),
+            TraceStep(op="finish", text=f"So {paren_if_negative(base)}^0 = 1.", after="1"),
+        ]
     else:
         factors = [base] * exponent
         trace = [
@@ -1212,7 +1217,7 @@ def gen_rounding_to_place_value(rng: random.Random, cfg: GenConfig) -> Sample:
         rounded_str = format(rounded.normalize(), "f")
         trace = [
             TraceStep(op="locate_digit", text=f"Round {dec_str} to {places} decimal place(s)."),
-            TraceStep(op="check_next", text=f"Look at the digit in the {(places + 1)}th decimal place."),
+            TraceStep(op="check_next", text=f"Look at the digit in the {ordinal(places + 1)} decimal place."),
             TraceStep(op="round", text=f"Round, giving {rounded_str}."),
         ]
         trace.append(TraceStep(op="finish", text=f"So {dec_str} rounded to {places} decimal place(s) is {rounded_str}.", after=rounded_str))

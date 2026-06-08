@@ -268,9 +268,9 @@ def gen_systems_linear_2x2(rng: random.Random, cfg: GenConfig) -> Sample:
     const_from_y = b1 * y0
     rhs_x = c1 - const_from_y  # = a1 * x0
 
-    # Avoid "+ (-N)×M" dirty patterns — use fmt_add semantics (des_instruct.md sec 5).
+    # Avoid "+ (-N)×M" and "×-M" dirty patterns (des_instruct.md sec 5).
     sub_sign = " + " if const_from_y >= 0 else " - "
-    sub_term = f"{abs(b1)}×{y0}" if b1 >= 0 else f"{abs(b1)}×{y0}"
+    sub_term = f"{abs(b1)}×{paren_if_negative(y0)}"
     sub_text = f"Substitute y={y0} into equation (1): {fmt_signed_term(a1, 'x', first=True)}{sub_sign}{sub_term} = {c1}, i.e. {fmt_signed_term(a1, 'x', first=True)} {'+' if const_from_y >= 0 else '-'} {abs(const_from_y)} = {c1}."
 
     answer = f"x={x0}, y={y0}"
@@ -433,9 +433,11 @@ def gen_system_substitution_method(rng: random.Random, cfg: GenConfig) -> Sample
     rhs_x = c2 - const_val  # coef_x * x0
 
     answer = f"x={x0}, y={y0}"
+    # Avoid "+ -5" dirty pattern when b is negative.
+    b_str = f" + {b}" if b >= 0 else f" - {abs(b)}"
     trace = [
         TraceStep(op="label_equations", text=f"Equation (1) is {eq1_str}. Equation (2) is {eq2_str}."),
-        TraceStep(op="substitute", text=f"Substitute y from (1) into (2): {a}x + {b}({fmt_linear(m, c1)}) = {c2}."),
+        TraceStep(op="substitute", text=f"Substitute y from (1) into (2): {a}x{b_str}({fmt_linear(m, c1)}) = {c2}."),
         TraceStep(op="distribute", text=f"Distribute: {a}x {fmt_signed_term(b * m, 'x', first=False)} {fmt_signed_term(const_val, '', first=False)} = {c2}."),
         TraceStep(op="collect", text=f"Collect x terms: {fmt_linear(coef_x, const_val)} = {c2}."),
         TraceStep(op="move_constant", text=f"Move constant: {fmt_linear(coef_x, 0)} = {rhs_x}."),
