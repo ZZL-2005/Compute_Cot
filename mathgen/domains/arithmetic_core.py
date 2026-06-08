@@ -1302,9 +1302,9 @@ def gen_percent_find_part_or_whole(rng: random.Random, cfg: GenConfig) -> Sample
         result = Fraction(base * percent, 100)
         answer = fmt_fraction(result) if result.denominator != 1 else str(result)
         trace = [
-            TraceStep(op="percent_means", text=f"{percent}% means {percent} per 100."),
-            TraceStep(op="multiply", text=f"Multiply the base by the fraction: {base} × {percent}/100 = {base} × {percent/100}."),
-            TraceStep(op="compute", text=f"Compute: {base * percent} / 100 = {answer}."),
+            TraceStep(op="percent_means", text=f"{percent}% means {percent} per 100, so as a fraction it is {percent}/100."),
+            TraceStep(op="multiply", text=f"Multiply: {base} × {percent}/100 = ({base} × {percent}) / 100."),
+            TraceStep(op="compute", text=f"Compute: {base * percent} ÷ 100 = {answer}."),
             TraceStep(op="finish", text=f"So {percent}% of {base} is {answer}.", after=answer),
         ]
         return make_sample(

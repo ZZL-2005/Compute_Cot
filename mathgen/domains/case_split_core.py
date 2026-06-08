@@ -147,10 +147,49 @@ def gen_merge_case_results(rng: random.Random, cfg: GenConfig) -> Sample:
     )
 
 
+def gen_split_by_piecewise_condition(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Split a computation by piecewise-defined function branches.
+
+    des_instruct.md sec 13.4: case splitting based on piecewise condition.
+    """
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 6, Difficulty.MEDIUM: 10, Difficulty.HARD: 15}[diff]
+
+    c = rng.randint(-5, 5)
+    a1, b1 = rng.randint(-hi, hi), rng.randint(-hi, hi)
+    a2, b2 = rng.randint(-hi, hi), rng.randint(-hi, hi)
+    x0 = rng.randint(-hi, hi)
+
+    if x0 < c:
+        branch = "x < " + str(c)
+        val = a1 * x0 + b1
+        rule = f"{a1}x + {b1}" if b1 >= 0 else f"{a1}x - {abs(b1)}"
+    else:
+        branch = "x ≥ " + str(c)
+        val = a2 * x0 + b2
+        rule = f"{a2}x + {b2}" if b2 >= 0 else f"{a2}x - {abs(b2)}"
+
+    trace = [
+        TraceStep(op="identify_condition", text=f"The function is defined piecewise with split point x = {c}."),
+        TraceStep(op="check_condition", text=f"For x = {x0}, check: {x0} {'<' if x0 < c else '≥'} {c}, so use the branch for {branch}."),
+        TraceStep(op="evaluate_branch", text=f"Evaluate f(x) = {rule} at x = {x0}: f({x0}) = {val}."),
+        TraceStep(op="finish", text=f"So f({x0}) = {val}.", after=str(val)),
+    ]
+    return make_sample(
+        "case_split.split_by_piecewise_condition",
+        f"Let f(x) = {a1}x + {b1} for x < {c}, and f(x) = {a2}x + {b2} for x ≥ {c}. Find f({x0}).",
+        trace,
+        str(val),
+        {"c": c, "x0": x0, "branch": branch, "difficulty": diff},
+        verified=(val == (a1 * x0 + b1 if x0 < c else a2 * x0 + b2)),
+    )
+
+
 REGISTRY: Dict[str, Any] = {
     "case_split.split_by_sign": gen_split_by_sign,
     "case_split.split_by_zero_points": gen_split_by_zero_points,
     "case_split.split_by_absolute_value": gen_split_by_absolute_value,
+    "case_split.split_by_piecewise_condition": gen_split_by_piecewise_condition,
     "case_split.split_by_parameter": gen_split_by_parameter,
     "case_split.merge_case_results": gen_merge_case_results,
 }

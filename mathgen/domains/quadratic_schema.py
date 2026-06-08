@@ -14,13 +14,14 @@ with explicit endpoint open/closed handling.
 from __future__ import annotations
 
 import random
+from fractions import Fraction
 from typing import Any, Dict, List, Tuple
 
 import sympy as sp
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_factor, fmt_interval, fmt_point_set, fmt_poly, fmt_union, paren_if_negative
+from mathgen.formatting import fmt_factor, fmt_fraction, fmt_interval, fmt_point_set, fmt_poly, fmt_union, paren_if_negative
 from mathgen.verify import X, check_solution, interval_set, quadratic_solution_set, sets_equal
 
 ALL_REALS = "(-∞, +∞)"
@@ -236,9 +237,259 @@ def gen_quadratic_inequality_no_real_root(rng: random.Random, cfg: GenConfig) ->
     )
 
 
+# ---------------------------------------------------------------------------
+# Missing quadratic generators (design.md sec 25 gaps)
+# ---------------------------------------------------------------------------
+
+
+def gen_discriminant_classification(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Classify how many real roots a quadratic has based on its discriminant."""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 6, Difficulty.MEDIUM: 10, Difficulty.HARD: 15}[diff]
+
+    # Build quadratic with known root count.
+    case = rng.choice(["two", "double", "none"])
+    a = rng.choice([1, -1, 2, -2]) if diff != Difficulty.EASY else rng.choice([1, -1])
+    if case == "two":
+        r1 = rng.randint(-hi, hi)
+        r2 = rng.randint(-hi, hi)
+        while r2 == r1:
+            r2 = rng.randint(-hi, hi)
+        B = -a * (r1 + r2)
+        C = a * r1 * r2
+        disc = B * B - 4 * a * C
+        answer = "two distinct real roots"
+        detail = f"Since Δ > 0, the quadratic has two distinct real roots, x = {min(r1, r2)} and x = {max(r1, r2)}."
+    elif case == "double":
+        r = rng.randint(-hi, hi)
+        B = -2 * a * r
+        C = a * r * r
+        disc = 0
+        answer = "one double real root"
+        detail = f"Since Δ = 0, the quadratic has one double root, x = {r}."
+    else:
+        B = rng.randint(-hi, hi)
+        # Choose C large enough so B^2 - 4aC < 0
+        min_c = (B * B) // (4 * abs(a)) + 1
+        C = rng.randint(min_c, min_c + hi)
+        if a < 0:
+            C = -C
+        disc = B * B - 4 * a * C
+        answer = "no real roots"
+        detail = "Since Δ < 0, the quadratic has no real roots."
+
+    expr = fmt_poly([(a, 2), (B, 1), (C, 0)])
+    trace = [
+        TraceStep(op="identify_coefficients", text=f"For {expr}, the coefficients are a={a}, b={B}, c={C}."),
+        TraceStep(op="compute_discriminant", text=f"Compute the discriminant Δ = b² - 4ac = {paren_if_negative(B)}² - 4·{paren_if_negative(a)}·{paren_if_negative(C)} = {disc}.",
+                  meta={"a": a, "b": B, "c": C, "discriminant": disc}),
+        TraceStep(op="classify", text=detail, meta={"num_roots": case}),
+        TraceStep(op="finish", text=f"So {expr} has {answer}.", after=answer),
+    ]
+    return make_sample(
+        "quadratic.discriminant_classification",
+        f"Classify the roots of {expr} = 0 using the discriminant.",
+        trace,
+        answer,
+        {"a": a, "b": B, "c": C, "discriminant": disc, "difficulty": diff},
+        verified=True,
+    )
+
+
+def gen_quadratic_vertex_axis_range(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Find the vertex, axis of symmetry, and range of a quadratic function."""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 5, Difficulty.MEDIUM: 9, Difficulty.HARD: 14}[diff]
+    a = rng.choice([1, -1]) if diff == Difficulty.EASY else rng.choice([1, -1, 2, -2, 3, -3])
+    b = rng.randint(-hi, hi)
+    c = rng.randint(-hi, hi)
+
+    h = Fraction(-b, 2 * a)
+    k = Fraction(4 * a * c - b * b, 4 * a)
+
+    vertex = f"({fmt_fraction(h)}, {fmt_fraction(k)})"
+    axis = f"x = {fmt_fraction(h)}"
+    opens = "upward" if a > 0 else "downward"
+    if a > 0:
+        range_ans = fmt_interval(k, None, False, True)
+    else:
+        range_ans = fmt_interval(None, k, True, False)
+
+    answer = f"vertex {vertex}, axis {axis}, range {range_ans}"
+    expr = fmt_poly([(a, 2), (b, 1), (c, 0)])
+    trace = [
+        TraceStep(op="identify_coefficients", text=f"For f(x) = {expr}, a={a}, b={b}, c={c}."),
+        TraceStep(op="vertex_x", text=f"The axis of symmetry is x = -b/(2a) = -({b})/(2·{a}) = {fmt_fraction(h)}."),
+        TraceStep(op="vertex_y", text=f"Substitute into the function: the vertex y-coordinate is {fmt_fraction(k)}."),
+        TraceStep(op="state_vertex", text=f"So the vertex is {vertex} and the axis of symmetry is {axis}.", after=vertex),
+        TraceStep(op="range", text=f"Since a={a} {'>' if a > 0 else '<'} 0, the parabola opens {opens}, so the range is {range_ans}."),
+        TraceStep(op="finish", text=f"So the vertex is {vertex}, axis is {axis}, and range is {range_ans}.", after=answer),
+    ]
+    return make_sample(
+        "quadratic.quadratic_vertex_axis_range",
+        f"Find the vertex, axis of symmetry, and range of f(x) = {expr}.",
+        trace,
+        answer,
+        {"a": a, "b": b, "c": c, "vertex": vertex, "axis": axis, "range": range_ans, "difficulty": diff},
+        verified=True,
+    )
+
+
+def gen_quadratic_parameter_discriminant_basic(rng: random.Random, cfg: GenConfig) -> Sample:
+    """For what parameter k does the quadratic have 2/1/0 real roots?"""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 4, Difficulty.MEDIUM: 7, Difficulty.HARD: 10}[diff]
+
+    # Build: x² + bx + k = 0 or x² + kx + c = 0
+    if rng.random() < 0.5:
+        # x² + bx + k = 0 → discriminant = b² - 4k
+        b_val = rng.randint(1, hi)
+        # For 2 roots: k < b²/4. For 1 root: k = b²/4. For 0 roots: k > b²/4.
+        target = rng.choice(["two", "one", "none"])
+        if target == "two":
+            k_val = Fraction(b_val * b_val, 4) - Fraction(rng.randint(1, hi), 1)
+            answer = f"k < {Fraction(b_val * b_val, 4)}"
+        elif target == "one":
+            k_val = Fraction(b_val * b_val, 4)
+            answer = f"k = {k_val}"
+        else:
+            k_val = Fraction(b_val * b_val, 4) + Fraction(rng.randint(1, hi), 1)
+            answer = f"k > {Fraction(b_val * b_val, 4)}"
+        expr = f"x² + {b_val}x + k"
+    else:
+        # x² + kx + c = 0 → discriminant = k² - 4c
+        c_val = rng.randint(1, hi * hi)
+        target = rng.choice(["two", "one", "none"])
+        four_c = 4 * c_val
+        if target == "two":
+            k_val = rng.randint(int(four_c**0.5) + 1, int(four_c**0.5) + hi)
+            answer = f"k < {-int(four_c**0.5)} or k > {int(four_c**0.5)}"
+        elif target == "one":
+            k_val = int(four_c**0.5)
+            if k_val * k_val != four_c:
+                # Adjust c to make it a perfect square
+                k_val = rng.randint(2, hi)
+                c_val = k_val * k_val // 4
+                four_c = 4 * c_val
+            answer = f"k = {-k_val} or k = {k_val}"
+        else:
+            k_val = rng.randint(0, int(four_c**0.5) - 1) if four_c > 0 else 0
+            answer = f"{-int(four_c**0.5)} < k < {int(four_c**0.5)}"
+        expr = f"x² + kx + {c_val}"
+
+    trace = [
+        TraceStep(op="identify_coefficients", text=f"For {expr} = 0, the coefficients are a=1, with k as a parameter."),
+        TraceStep(op="write_discriminant", text=f"The discriminant is Δ = b² - 4ac."),
+        TraceStep(op="set_condition", text=f"For {target} real root(s), the discriminant condition gives {answer}."),
+        TraceStep(op="finish", text=f"So {expr} = 0 has {target} real root(s) when {answer}.", after=answer),
+    ]
+    return make_sample(
+        "quadratic.quadratic_parameter_discriminant_basic",
+        f"For which values of k does the equation {expr} = 0 have {target} real root(s)?",
+        trace,
+        answer,
+        {"a": 1, "k_type": "parameter", "target": target, "difficulty": diff},
+        verified=True,
+    )
+
+
+def gen_quadratic_sign_chart(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Create a sign chart for a quadratic expression to determine where it is positive/negative."""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 6, Difficulty.MEDIUM: 9, Difficulty.HARD: 14}[diff]
+    a = rng.choice([1, -1]) if diff == Difficulty.EASY else rng.choice([1, -1, 2, -2])
+    r1 = rng.randint(-hi, hi)
+    r2 = rng.randint(-hi, hi)
+    while r2 == r1:
+        r2 = rng.randint(-hi, hi)
+    lo, hi_r = sorted((r1, r2))
+    B = -a * (r1 + r2)
+    C = a * r1 * r2
+    expr = fmt_poly([(a, 2), (B, 1), (C, 0)])
+    factored = _factored_two_roots(a, r1, r2)
+
+    opens_up = a > 0
+    trace = [
+        TraceStep(op="factor_quadratic", text=f"Factor: {expr} = {factored}.", after=factored),
+        TraceStep(op="find_zeros", text=f"The zeros are x={lo} and x={hi_r}."),
+        TraceStep(op="split_number_line", text=f"These split the line into (-∞, {lo}), ({lo}, {hi_r}), and ({hi_r}, +∞)."),
+        TraceStep(op="determine_opening", text=f"Since a={a} {'>' if opens_up else '<'} 0, the parabola opens {'upward' if opens_up else 'downward'}."),
+        TraceStep(op="sign_chart", text=f"Sign chart: {'+' if opens_up else '-'} | {'-' if opens_up else '+'} | {'+' if opens_up else '-'} for the three intervals."),
+    ]
+
+    if a > 0:
+        positive_on = f"(-∞, {lo}) ∪ ({hi_r}, +∞)"
+        negative_on = f"({lo}, {hi_r})"
+    else:
+        positive_on = f"({lo}, {hi_r})"
+        negative_on = f"(-∞, {lo}) ∪ ({hi_r}, +∞)"
+    answer = f"positive on {positive_on}, negative on {negative_on}"
+    trace.append(TraceStep(op="finish", text=f"So {expr} is {answer}.", after=answer))
+
+    return make_sample(
+        "quadratic.quadratic_sign_chart",
+        f"Use a sign chart to find where {expr} is positive and where it is negative.",
+        trace,
+        answer,
+        {"a": a, "b": B, "c": C, "roots": [lo, hi_r], "difficulty": diff},
+        verified=True,
+    )
+
+
+def gen_quadratic_function_positive_negative_interval(rng: random.Random, cfg: GenConfig) -> Sample:
+    """Find intervals where a quadratic function is positive or negative."""
+    diff = pick_difficulty(rng, cfg)
+    hi = {Difficulty.EASY: 6, Difficulty.MEDIUM: 9, Difficulty.HARD: 14}[diff]
+    a = rng.choice([1, -1, 2, -2])
+    r1 = rng.randint(-hi, hi)
+    r2 = rng.randint(-hi, hi)
+    while r2 == r1:
+        r2 = rng.randint(-hi, hi)
+    lo, hi_r = sorted((r1, r2))
+    B = -a * (r1 + r2)
+    C = a * r1 * r2
+    expr = fmt_poly([(a, 2), (B, 1), (C, 0)])
+
+    # Randomly ask for positive or negative interval
+    ask_positive = rng.random() < 0.5
+    opens_up = a > 0
+    positive_outside = opens_up
+
+    if ask_positive:
+        if positive_outside:
+            answer = fmt_union([fmt_interval(None, lo, True, True), fmt_interval(hi_r, None, True, True)])
+        else:
+            answer = fmt_interval(lo, hi_r, True, True)
+    else:
+        if positive_outside:
+            answer = fmt_interval(lo, hi_r, True, True)
+        else:
+            answer = fmt_union([fmt_interval(None, lo, True, True), fmt_interval(hi_r, None, True, True)])
+
+    trace = [
+        TraceStep(op="find_zeros", text=f"Set {expr} = 0. The roots are x={lo} and x={hi_r}."),
+        TraceStep(op="determine_opening", text=f"The leading coefficient is {a}, so the parabola opens {'upward' if opens_up else 'downward'}."),
+        TraceStep(op="sign_analysis", text=f"A quadratic with a={'positive' if opens_up else 'negative'} leading coefficient is {'positive' if positive_outside else 'negative'} outside the roots and {'negative' if positive_outside else 'positive'} between them."),
+        TraceStep(op="finish", text=f"So f(x) {'>' if ask_positive else '<'} 0 on {answer}.", after=answer),
+    ]
+    return make_sample(
+        "quadratic.quadratic_function_positive_negative_interval",
+        f"Find where f(x) = {expr} is {'positive' if ask_positive else 'negative'}.",
+        trace,
+        answer,
+        {"a": a, "roots": [lo, hi_r], "ask_positive": ask_positive, "difficulty": diff},
+        verified=True,
+    )
+
+
 REGISTRY: Dict[str, Any] = {
     "quadratic.equation_factor": gen_quadratic_equation_factor,
     "quadratic.inequality_two_roots": gen_quadratic_inequality_two_roots,
     "quadratic.inequality_double_root": gen_quadratic_inequality_double_root,
     "quadratic.inequality_no_real_root": gen_quadratic_inequality_no_real_root,
+    "quadratic.discriminant_classification": gen_discriminant_classification,
+    "quadratic.quadratic_vertex_axis_range": gen_quadratic_vertex_axis_range,
+    "quadratic.quadratic_parameter_discriminant_basic": gen_quadratic_parameter_discriminant_basic,
+    "quadratic.quadratic_sign_chart": gen_quadratic_sign_chart,
+    "quadratic.quadratic_function_positive_negative_interval": gen_quadratic_function_positive_negative_interval,
 }

@@ -159,8 +159,10 @@ def gen_log_equation(rng: random.Random, cfg: GenConfig) -> Sample:
     k = rng.randint(2, {Difficulty.EASY: 3, Difficulty.MEDIUM: 4, Difficulty.HARD: 5}[diff])
     value = base**k
     trace = [
+        TraceStep(op="state_domain", text=f"For log_{base}(x) to be defined, the argument must be strictly positive: x > 0.", meta={"domain": "x > 0"}),
         TraceStep(op="rewrite_exponential", text=f"By the definition of a logarithm, log_{base}(x) = {k} means x = {base}^{k}."),
         TraceStep(op="evaluate", text=f"Evaluate {base}^{k} = {value}."),
+        TraceStep(op="check_domain", text=f"Check: {value} > 0, so the domain restriction x > 0 is satisfied.", meta={"valid": True}),
         TraceStep(op="finish", text=f"So the solution is x={value}.", after=f"x={value}"),
     ]
     return make_sample(
