@@ -9,11 +9,15 @@ from mathgen.config import GenConfig
 from mathgen.core import Sample
 from mathgen.domains import (
     arithmetic_core,
+    comparison_core,
     equation_inequality_core,
+    exp_log_core,
     expression_rewrite_core,
     functions_core,
+    number_theory_core,
     quadratic_schema,
     sequences_core,
+    set_logic_core,
 )
 
 Generator = Callable[[random.Random, GenConfig], Sample]
@@ -26,6 +30,10 @@ DOMAIN_MODULES = [
     quadratic_schema,
     functions_core,
     sequences_core,
+    exp_log_core,
+    number_theory_core,
+    comparison_core,
+    set_logic_core,
 ]
 
 
