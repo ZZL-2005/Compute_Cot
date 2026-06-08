@@ -323,7 +323,7 @@ def gen_quadratic_vertex_axis_range(rng: random.Random, cfg: GenConfig) -> Sampl
         TraceStep(op="vertex_y", text=f"Substitute into the function: the vertex y-coordinate is {fmt_fraction(k)}."),
         TraceStep(op="state_vertex", text=f"So the vertex is {vertex} and the axis of symmetry is {axis}.", after=vertex),
         TraceStep(op="range", text=f"Since a={a} {'>' if a > 0 else '<'} 0, the parabola opens {opens}, so the range is {range_ans}."),
-        TraceStep(op="finish", text=f"So the vertex is {vertex}, axis is {axis}, and range is {range_ans}.", after=answer),
+        TraceStep(op="finish", text=f"So {answer}.", after=answer),
     ]
     return make_sample(
         "quadratic.quadratic_vertex_axis_range",
