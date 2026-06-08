@@ -17,6 +17,7 @@ from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
 from mathgen.formatting import (
     fmt_add,
+    fmt_factor,
     fmt_fraction,
     fmt_interval,
     fmt_linear,
@@ -120,7 +121,8 @@ def gen_piecewise_function(rng: random.Random, cfg: GenConfig) -> Sample:
     f1, f2 = fmt_linear(a1, b1), fmt_linear(a2, b2)
     trace = [
         TraceStep(op="choose_branch", text=f"Since {k} {'<' if k < c else '≥'} {c}, use the branch for {branch}: f(x) = {fmt_linear(a, b)}."),
-        TraceStep(op="substitute", text=f"f({k}) = {paren_if_negative(a)}×{paren_if_negative(k)} + ({b}) = {value}."),
+        # Avoid "+ (-5)" dirty pattern: use fmt_signed_term for the constant (des_instruct.md sec 5).
+        TraceStep(op="substitute", text=f"f({k}) = {paren_if_negative(a)}×{paren_if_negative(k)}{fmt_signed_term(b, '', first=False)} = {value}."),
         TraceStep(op="finish", text=f"So f({k}) = {value}.", after=str(value)),
     ]
     return make_sample(
@@ -276,15 +278,20 @@ def gen_function_transformation(rng: random.Random, cfg: GenConfig) -> Sample:
     k = _nonzero(rng, -6, 6)
     hx = "right" if h > 0 else "left"
     ky = "up" if k > 0 else "down"
+    # Use fmt_factor to avoid "x - (-3)" dirty pattern (des_instruct.md sec 5).
+    shift_x = fmt_factor(-h)  # (x - h) or (x + |h|)
+    shift_k = fmt_signed_term(k, '', first=False)
+    x_inner = shift_x.replace("(", "").replace(")", "")  # "x - 3" or "x + 3"
+    func_str = f"f({x_inner}){shift_k}"
     answer = f"shift {abs(h)} units {hx} and {abs(k)} units {ky}"
     trace = [
-        TraceStep(op="horizontal", text=f"Replacing x by x - ({h}) shifts the graph {abs(h)} units {hx}."),
+        TraceStep(op="horizontal", text=f"Replacing x by {x_inner} shifts the graph {abs(h)} units {hx}."),
         TraceStep(op="vertical", text=f"Adding {k} shifts the graph {abs(k)} units {ky}."),
         TraceStep(op="finish", text=f"So the transformation is to {answer}.", after=answer),
     ]
     return make_sample(
         "function.function_transformation",
-        f"Describe how the graph of y = f(x - ({h})) + ({k}) is obtained from y = f(x).",
+        f"Describe how the graph of y = {func_str} is obtained from y = f(x).",
         trace,
         answer,
         {"h": h, "k": k, "difficulty": diff},

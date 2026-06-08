@@ -230,6 +230,20 @@ def fmt_point_set(value) -> str:
     return f"{{{fmt_value(value)}}}"
 
 
+def ordinal(n: int) -> str:
+    """Return the ordinal string for a positive integer (1st, 2nd, 3rd, ...)."""
+    if 11 <= (n % 100) <= 13:
+        return f"{n}th"
+    last = n % 10
+    if last == 1:
+        return f"{n}st"
+    if last == 2:
+        return f"{n}nd"
+    if last == 3:
+        return f"{n}rd"
+    return f"{n}th"
+
+
 def product_text(values: Sequence[int]) -> str:
     return "×".join(paren_if_negative(v) for v in values)
 

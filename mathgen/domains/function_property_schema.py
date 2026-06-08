@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_interval, fmt_linear, fmt_mul
+from mathgen.formatting import fmt_factor, fmt_interval, fmt_linear, fmt_mul, fmt_signed_term
 
 
 def gen_domain_of_rational_function(rng: random.Random, cfg: GenConfig) -> Sample:
@@ -15,14 +15,16 @@ def gen_domain_of_rational_function(rng: random.Random, cfg: GenConfig) -> Sampl
     hi = {Difficulty.EASY: 6, Difficulty.MEDIUM: 12, Difficulty.HARD: 20}[diff]
     a, b = sorted(rng.sample(range(-hi, hi + 1), 2))
     answer = f"x ≠ {a} and x ≠ {b}"
+    # Use fmt_factor to avoid "(x - (-3))" — outputs "(x + 3)" cleanly.
+    denom_str = f"{fmt_factor(-a)}{fmt_factor(-b)}"
     trace = [
         TraceStep(op="denominator_rule", text="A rational function excludes zeros of its denominator."),
-        TraceStep(op="factor_zeros", text=f"The denominator (x - ({a}))(x - ({b})) is zero at x = {a} and x = {b}."),
+        TraceStep(op="factor_zeros", text=f"The denominator {denom_str} is zero at x = {a} and x = {b}."),
         TraceStep(op="finish", text=f"So the domain restriction is {answer}.", after=answer),
     ]
     return make_sample(
         "function_property_schema.domain_of_rational_function",
-        f"Find the domain restriction for f(x)=1/((x - ({a}))(x - ({b}))).",
+        f"Find the domain restriction for f(x)=1/{denom_str}.",
         trace,
         answer,
         {"a": a, "b": b, "difficulty": diff},
@@ -72,15 +74,19 @@ def gen_range_of_quadratic_function(rng: random.Random, cfg: GenConfig) -> Sampl
     diff = pick_difficulty(rng, cfg)
     h = rng.randint(-8, 8)
     k = rng.randint(-8, 8)
+    # Avoid "(x - (-2))^2 + (-6)" — use clean formatter (des_instruct.md sec 5).
+    x_part = fmt_factor(-h)  # (x - h) or (x + |h|)
+    k_part = fmt_signed_term(k, '', first=False) if k != 0 else ''
+    func_str = f"({x_part})^2{k_part}"
     answer = fmt_interval(k, None, False, True)
     trace = [
-        TraceStep(op="vertex_form", text=f"The function f(x) = (x - ({h}))^2 + ({k}) is in vertex form."),
+        TraceStep(op="vertex_form", text=f"The function f(x) = {func_str} is in vertex form."),
         TraceStep(op="minimum", text=f"A square is always nonnegative, so the minimum value is {k} at x = {h}."),
         TraceStep(op="finish", text=f"So the range is {answer}.", after=answer),
     ]
     return make_sample(
         "function_property_schema.range_of_quadratic_function",
-        f"Find the range of f(x)=(x - ({h}))^2 + ({k}).",
+        f"Find the range of f(x)={func_str}.",
         trace,
         answer,
         {"h": h, "k": k, "difficulty": diff},
@@ -166,7 +172,8 @@ def gen_composite_function_evaluation(rng: random.Random, cfg: GenConfig) -> Sam
     ans = a * gx + b
     trace = [
         TraceStep(op="inner", text=f"First compute g({x0}) = {fmt_linear(c, d)} with x = {x0}, giving {gx}."),
-        TraceStep(op="outer", text=f"Then compute f(g({x0})) = f({gx}) = {fmt_mul(a, gx)} + ({b}) = {ans}."),
+        # Avoid "+ (-3)" dirty pattern: use fmt_signed_term for the constant.
+        TraceStep(op="outer", text=f"Then compute f(g({x0})) = f({gx}) = {fmt_mul(a, gx)}{fmt_signed_term(b, '', first=False)} = {ans}."),
         TraceStep(op="finish", text=f"So f(g({x0})) = {ans}.", after=str(ans)),
     ]
     return make_sample(

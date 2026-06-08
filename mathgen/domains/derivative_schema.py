@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_interval, fmt_linear, fmt_union
+from mathgen.formatting import fmt_factor, fmt_interval, fmt_linear, fmt_signed_term, fmt_union
 
 
 def gen_derivative_computation_schema(rng: random.Random, cfg: GenConfig) -> Sample:
@@ -71,13 +71,17 @@ def gen_local_extrema_schema(rng: random.Random, cfg: GenConfig) -> Sample:
     diff = pick_difficulty(rng, cfg)
     h = rng.randint(-8, 8)
     k = rng.randint(-10, 10)
+    # Avoid "(x - (-2))^2 + (-6)" — use clean formatter (des_instruct.md sec 5).
+    x_part = fmt_factor(-h)  # (x - h) or (x + |h|)
+    k_part = fmt_signed_term(k, '', first=False) if k != 0 else ''
+    func_str = f"({x_part})^2{k_part}"
     answer = f"minimum {k} at x={h}"
     trace = [
-        TraceStep(op="vertex_form", text=f"f(x)=(x - ({h}))^2 + ({k}) is a square plus {k}."),
+        TraceStep(op="vertex_form", text=f"f(x)={func_str} is a square{k_part}."),
         TraceStep(op="nonnegative_square", text=f"The square is minimized at x={h}, where its value is 0."),
         TraceStep(op="finish", text=f"So the local extremum is {answer}.", after=answer),
     ]
-    return make_sample("derivative_schema.local_extrema_schema", f"Find the local extremum of f(x)=(x - ({h}))^2 + ({k}).", trace, answer, {"h": h, "k": k, "difficulty": diff}, verified=True)
+    return make_sample("derivative_schema.local_extrema_schema", f"Find the local extremum of f(x)={func_str}.", trace, answer, {"h": h, "k": k, "difficulty": diff}, verified=True)
 
 
 def gen_closed_interval_extreme_schema(rng: random.Random, cfg: GenConfig) -> Sample:
