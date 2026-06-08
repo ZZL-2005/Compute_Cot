@@ -190,10 +190,12 @@ def gen_multiply_by_expression(rng: random.Random, cfg: GenConfig) -> Sample:
     expr = f"({b})/(x - ({a}))"
     eq_text = f"{b}/(x - ({a})) = {c_val}" if c_val != 1 else f"{b}/(x - ({a})) = 1"
 
+    # Use clean fraction — avoid "a/-b" dirty pattern when denominator is negative.
+    div_repr = f"{b}/{c_val}" if c_val > 0 else f"{b}/({c_val})"
     trace = [
         TraceStep(op="state_domain", text=f"The expression {expr} is undefined when the denominator is zero, so x ≠ {a}.", meta={"restricted": a}),
         TraceStep(op="multiply_by_expression", text=f"Multiply both sides by (x - ({a})). Since we are multiplying by an expression that could be zero, we must check later.", meta={"factor": f"x - ({a})"}),
-        TraceStep(op="solve", text=f"This gives {b} = {c_val}(x - ({a})). Solve: x - ({a}) = {b}/{c_val} = {rhs}, so x = {fmt_fraction(sol)}."),
+        TraceStep(op="solve", text=f"This gives {b} = {c_val}(x - ({a})). Solve: x - ({a}) = {div_repr} = {fmt_fraction(rhs)}, so x = {fmt_fraction(sol)}."),
         TraceStep(op="check_domain", text=f"Check: {fmt_fraction(sol)} ≠ {a}, so the solution is valid.", meta={"valid": True}),
         TraceStep(op="finish", text=f"So the solution is x={fmt_fraction(sol)}.", after=f"x={fmt_fraction(sol)}"),
     ]

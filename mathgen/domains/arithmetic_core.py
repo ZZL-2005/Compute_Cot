@@ -373,7 +373,7 @@ def gen_long_multiplication(rng: random.Random, cfg: GenConfig) -> Sample:
     for pos, ch in enumerate(str(b)[::-1]):
         digit = int(ch)
         # Compute digit-sub-steps and emit as individual TraceSteps.
-        trace.append(TraceStep(op="start_partial", text=f"--- Partial product for the {place_name(pos)} digit {digit}: compute {a}×{digit} ---"))
+        trace.append(TraceStep(op="start_partial", text=f"Partial product for the {place_name(pos)} digit {digit}: compute {a}×{digit}.", meta={"position": pos, "digit": digit}))
         carry = 0
         partial_digits: List[int] = []
         for i, dch in enumerate(str(a)[::-1]):
