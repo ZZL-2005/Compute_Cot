@@ -366,7 +366,7 @@ def gen_expand_perfect_square(rng: random.Random, cfg: GenConfig) -> Sample:
         TraceStep(op="state_formula", text=f"Use (P ± Q)² = P² ± 2PQ + Q² with P = {fmt_linear(a, 0)}, Q = {abs(b)}."),
         TraceStep(op="square_first", text=f"P² = ({fmt_linear(a, 0)})² = {a_sq}x².", meta={"a_sq": a_sq}),
         TraceStep(op="double_product", text=f"2PQ = 2 × {fmt_linear(a, 0)} × {paren_if_negative(b)} = {two_ab}x.", meta={"two_ab": two_ab}),
-        TraceStep(op="square_second", text=f"Q² = ({paren_if_negative(b)})² = {b_sq}.", meta={"b_sq": b_sq}),
+        TraceStep(op="square_second", text=f"Q² = {paren_if_negative(b)}² = {b_sq}.", meta={"b_sq": b_sq}),
         TraceStep(op="finish", text=f"Combine: {answer}.", after=answer),
     ]
     expanded = (a * X + b) ** 2

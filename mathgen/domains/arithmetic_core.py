@@ -754,6 +754,11 @@ def gen_powers(rng: random.Random, cfg: GenConfig) -> Sample:
             TraceStep(op="apply_rule", text=f"Here the base is {paren_if_negative(base)}, which is nonzero."),
             TraceStep(op="finish", text=f"So {paren_if_negative(base)}^0 = 1.", after="1"),
         ]
+    elif exponent == 1:
+        trace = [
+            TraceStep(op="state_rule", text=f"Any number to the power 1 is itself: {paren_if_negative(base)}^1 = {base}."),
+            TraceStep(op="finish", text=f"So {paren_if_negative(base)}^1 = {base}.", after=str(base)),
+        ]
     else:
         factors = [base] * exponent
         trace = [
@@ -1119,15 +1124,15 @@ def gen_order_of_operations_nested(rng: random.Random, cfg: GenConfig) -> Sample
     diff = pick_difficulty(rng, cfg)
     if diff == Difficulty.EASY:
         a, b, c, d = rng.randint(1, 8), rng.randint(1, 6), rng.randint(2, 5), rng.randint(1, 6)
-        inner = a + b
-        mult = inner * c
-        result = mult - d
-        py_result = (a + b) * c - d
-        expr = f"({a} + {b}) × {c} - {d}"
+        inner1 = a + b
+        inner2 = c - d
+        result = inner1 * inner2
+        py_result = (a + b) * (c - d)
+        expr = f"({a} + {b}) × ({c} - {d})"
         trace = [
-            TraceStep(op="parentheses_first", text=f"Innermost parentheses first: {a} + {b} = {inner}."),
-            TraceStep(op="multiply", text=f"Then multiply: {inner} × {c} = {mult}."),
-            TraceStep(op="subtract", text=f"Finally subtract: {mult} - {d} = {result}."),
+            TraceStep(op="first_parens", text=f"Inside the first parentheses: {a} + {b} = {inner1}."),
+            TraceStep(op="second_parens", text=f"Inside the second parentheses: {c} - {d} = {inner2}."),
+            TraceStep(op="multiply", text=f"Multiply the results: {paren_if_negative(inner1)} × {paren_if_negative(inner2)} = {result}."),
         ]
     elif diff == Difficulty.MEDIUM:
         a, b, c, d = rng.randint(2, 9), rng.randint(1, 7), rng.randint(2, 6), rng.randint(2, 5)
@@ -1208,10 +1213,14 @@ def gen_rounding_to_place_value(rng: random.Random, cfg: GenConfig) -> Sample:
             verified=(int(rounded) == int(round(n / unit) * unit)),
         )
     else:
-        # Decimal place rounding — use exact Decimal arithmetic.
+        # Decimal place rounding — ensure the number has more digits than the target
+        # so rounding actually changes the value (non-trivial).
         places = rng.randint(1, 3)
+        # Generate with extra digits beyond the rounding target.
+        extra = rng.randint(1, 2)
+        total_places = places + extra
         n = rng.randint(100, 99999)
-        dec = Decimal(n) / Decimal(10**places)
+        dec = Decimal(n) / Decimal(10**total_places)
         dec_str = format(dec.normalize(), "f")
         rounded = dec.quantize(Decimal(1) / Decimal(10**places))
         rounded_str = format(rounded.normalize(), "f")
