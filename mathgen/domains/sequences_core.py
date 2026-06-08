@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_add, fmt_fraction, fmt_mul, fmt_signed_term, ordinal, paren_if_negative
+from mathgen.formatting import fmt_add, fmt_fraction, fmt_mul, fmt_signed_term, ordinal, paren_if_negative, pick_template
 
 
 def _nonzero(rng: random.Random, lo: int, hi: int) -> int:
@@ -76,7 +76,7 @@ def gen_arithmetic_series_sum(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "sequence.arithmetic_series_sum",
-        f"Find the sum of the first {n} terms of the arithmetic sequence with first term {a1} and common difference {d}.",
+        pick_template(rng, f"Find the sum of the first {n} terms of the arithmetic sequence with a_1={a1} and d={d}.", f"Calculate S_{n} for the arithmetic sequence with first term {a1}, common difference {d}.", f"An arithmetic sequence has a_1={a1}, d={d}. Find the sum of the first {n} terms."),
         trace,
         str(result),
         {"a1": a1, "d": d, "n": n, "difficulty": diff},
@@ -134,7 +134,7 @@ def gen_geometric_series_sum(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "sequence.geometric_series_sum",
-        f"Find the sum of the first {n} terms of the geometric sequence with first term {a1} and common ratio {r}.",
+        pick_template(rng, f"Find the sum of the first {n} terms of the geometric sequence with a_1={a1} and r={r}.", f"Calculate S_{n} for the geometric sequence with first term {a1}, common ratio {r}.", f"A geometric sequence has a_1={a1}, r={r}. Find the sum of the first {n} terms."),
         trace,
         str(result),
         {"a1": a1, "r": r, "n": n, "difficulty": diff},

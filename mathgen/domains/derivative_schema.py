@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_factor, fmt_interval, fmt_linear, fmt_signed_term, fmt_union
+from mathgen.formatting import pick_template,  fmt_factor, fmt_interval, fmt_linear, fmt_signed_term, fmt_union
 
 
 def gen_derivative_computation_schema(rng: random.Random, cfg: GenConfig) -> Sample:

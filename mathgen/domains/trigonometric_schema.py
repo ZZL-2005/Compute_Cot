@@ -7,6 +7,7 @@ from typing import Any, Dict
 
 from mathgen.config import GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
+from mathgen.formatting import pick_template
 
 _REF = {120: 60, 135: 45, 150: 30, 210: 30, 225: 45, 240: 60, 300: 60, 315: 45, 330: 30}
 _SIGNS = {
@@ -30,7 +31,7 @@ def gen_reference_angle_schema(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "trigonometric_schema.reference_angle_schema",
-        f"Find the reference angle for {angle}°.",
+        pick_template(rng, f"Find the reference angle for {angle}°.", f"Determine the reference angle of {angle}°.", f"What is the reference angle for {angle}°?", f"Calculate the acute reference angle for {angle}°."),
         trace,
         f"{ref}°",
         {"angle": angle, "difficulty": diff},
@@ -150,7 +151,7 @@ def gen_trig_periodicity_solution_set(rng: random.Random, cfg: GenConfig) -> Sam
     ]
     return make_sample(
         "trigonometric_schema.trig_periodicity_solution_set",
-        f"A trigonometric equation has solution {base}° and period {period}°. Write the periodic solution set.",
+        pick_template(rng, f"A trigonometric equation has solution {base}° and period {period}°. Write the periodic solution set.", f"Given a base solution {base}° and period {period}°, express all solutions.", f"Write the general solution given one solution {base}° and period {period}°."),
         trace,
         answer,
         {"base": base, "period": period, "difficulty": diff},

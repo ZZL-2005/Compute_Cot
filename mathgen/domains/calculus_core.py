@@ -18,7 +18,7 @@ import sympy as sp
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_factor, fmt_fraction, fmt_linear, fmt_poly, paren_if_negative
+from mathgen.formatting import fmt_factor, fmt_fraction, fmt_linear, fmt_poly, paren_if_negative, pick_template
 
 X = sp.Symbol("x")
 
@@ -340,7 +340,7 @@ def gen_power_integral(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "integration.power_integral",
-        f"Find the indefinite integral ∫ {a}x^{n} dx.",
+        pick_template(rng, f"Find the indefinite integral ∫ {a}x^{n} dx.", f"Integrate ∫ {a}x^{n} dx.", f"Compute ∫ {a}x^{n} dx.", f"Evaluate the indefinite integral ∫ {a}x^{n} dx."),
         trace,
         answer,
         {"a": a, "n": n, "difficulty": diff},
@@ -366,7 +366,7 @@ def gen_definite_integral_basic(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "integration.definite_integral_basic",
-        f"Evaluate the definite integral of {a}x^{n} from 0 to {b}.",
+        pick_template(rng, f"Evaluate the definite integral of {a}x^{n} from 0 to {b}.", f"Compute ∫_0^{b} {a}x^{n} dx.", f"Find the definite integral ∫_0^{b} {a}x^{n} dx.", f"Evaluate ∫_0^{b} {a}x^{n} dx."),
         trace,
         str(value),
         {"a": a, "n": n, "b": b, "difficulty": diff},

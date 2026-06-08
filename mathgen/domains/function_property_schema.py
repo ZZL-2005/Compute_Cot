@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_factor, fmt_interval, fmt_linear, fmt_mul, fmt_signed_term
+from mathgen.formatting import pick_template,  fmt_factor, fmt_interval, fmt_linear, fmt_mul, fmt_signed_term
 
 
 def gen_domain_of_rational_function(rng: random.Random, cfg: GenConfig) -> Sample:

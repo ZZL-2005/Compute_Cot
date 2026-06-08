@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 
 from mathgen.config import Difficulty, GenConfig, pick_difficulty
 from mathgen.core import Sample, TraceStep, make_sample
-from mathgen.formatting import fmt_fraction, fmt_value
+from mathgen.formatting import pick_template,  fmt_fraction, fmt_value
 
 
 def gen_permutation(rng: random.Random, cfg: GenConfig) -> Sample:
@@ -33,7 +33,7 @@ def gen_permutation(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "combinatorics.permutation",
-        f"Compute the number of permutations P({n}, {r}).",
+        pick_template(rng, f"Compute the number of permutations P({n}, {r}).", f"Find P({n}, {r}).", f"How many permutations of {n} items taken {r} at a time?", f"Calculate the number of ordered arrangements of {r} items from {n}."),
         trace,
         str(result),
         {"n": n, "r": r, "difficulty": diff},
@@ -58,7 +58,7 @@ def gen_combination(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "combinatorics.combination",
-        f"Compute the number of combinations C({n}, {r}).",
+        pick_template(rng, f"Compute the number of combinations C({n}, {r}).", f"Find C({n}, {r}).", f"How many ways to choose {r} items from {n}?", f"Calculate the number of unordered selections of {r} from {n}."),
         trace,
         str(result),
         {"n": n, "r": r, "difficulty": diff},
@@ -124,7 +124,7 @@ def gen_probability_basic(rng: random.Random, cfg: GenConfig) -> Sample:
     ]
     return make_sample(
         "combinatorics.probability_basic",
-        f"A bag has {red} red and {other} other balls. What is the probability of drawing a red ball?",
+        pick_template(rng, f"A bag has {red} red and {other} other balls. What is the probability of drawing a red ball?", f"In a bag with {red} red and {other} other balls, find P(red).", f"A bag contains {red} red and {other} other balls. Find the probability of picking a red ball at random.", f"There are {red} red and {other} non-red balls. What is the probability of drawing red?"),
         trace,
         ans,
         {"red": red, "other": other, "difficulty": diff},
