@@ -262,14 +262,17 @@ def gen_integer_subtraction_borrow(rng: random.Random, cfg: GenConfig) -> Sample
                     )
                 )
             else:
-                zero_places = ", ".join(place_name(k) for k in range(i + 1, j))
+                # 报告 §5 Bug A：连续零借位必须显式级联——最近非零位减 1，中间每个 0 变 9，逐位说清
+                src_now = top[j] - 1
+                cascade = "; ".join(f"the {place_name(k)} place 0 becomes 9" for k in range(j - 1, i, -1))
                 trace.append(
                     TraceStep(
                         op="borrow_chain",
                         text=(
-                            f"At the {place_name(i)} place, {before_digit} is too small to subtract {sub_digit}. "
-                            f"Borrow from the {place_name(j)} place through the zero place(s) {zero_places}; "
-                            f"the current digit becomes {before_digit + 10}."
+                            f"At the {place_name(i)} place, {before_digit} is too small to subtract {sub_digit}, "
+                            f"and the next place(s) are 0, so borrow from the nearest nonzero place, the {place_name(j)} place. "
+                            f"That {place_name(j)} digit {top[j]} becomes {src_now}; {cascade}; "
+                            f"and the {place_name(i)} digit {before_digit} becomes {before_digit + 10}."
                         ),
                         meta={"place": i, "borrow_from": j, "through_zero_places": list(range(i + 1, j))},
                     )
@@ -360,19 +363,58 @@ def multiply_by_digit_trace(a: int, digit: int) -> Tuple[int, str, List[Dict[str
     return value, "; ".join(pieces), meta_steps
 
 
-def gen_long_multiplication(rng: random.Random, cfg: GenConfig) -> Sample:
-    diff = pick_difficulty(rng, cfg)
-    a_digits = {Difficulty.EASY: 2, Difficulty.MEDIUM: 3, Difficulty.HARD: 4}[diff]
-    b_digits = {Difficulty.EASY: 2, Difficulty.MEDIUM: 2, Difficulty.HARD: 3}[diff]
-    a = randint_digits(rng, a_digits)
-    b = randint_digits(rng, b_digits)
-    result = a * b
+def emit_worked_addition(trace: List[TraceStep], a: int, b: int, indent: str = "  ") -> int:
+    """Append a worked column-by-column carry addition for a+b; return a+b.
 
-    trace: List[TraceStep] = [TraceStep(op="decompose_multiplier", text=f"Break the multiplier {b} into place-value digits. Compute partial products for each digit position, then sum them.", meta={"a": a, "b": b})]
+    诊断报告 §1：多位数求和绝不能甩成一行断言，必须逐列进位 worked CoT。
+    """
+    aa = [int(c) for c in str(a)][::-1]
+    bb = [int(c) for c in str(b)][::-1]
+    m = max(len(aa), len(bb))
+    carry = 0
+    out: List[int] = []
+    for i in range(m):
+        da = aa[i] if i < len(aa) else 0
+        db = bb[i] if i < len(bb) else 0
+        s = da + db + carry
+        write = s % 10
+        new_carry = s // 10
+        parts = f"{da}+{db}" + (f"+{carry}" if carry else "")
+        suffix = f", write {write}, carry {new_carry}" if new_carry else f", write {write}"
+        trace.append(TraceStep(op="add_column", text=f"{indent}{place_name(i)}: {parts}={s}{suffix}.",
+                               meta={"place": i, "a_digit": da, "b_digit": db, "incoming_carry": carry, "sum": s, "write": write, "carry": new_carry}))
+        carry = new_carry
+        out.append(write)
+    if carry:
+        out.append(carry)
+        trace.append(TraceStep(op="add_final_carry", text=f"{indent}Final carry {carry} goes to the front.", meta={"carry": carry}))
+    return a + b
+
+
+def emit_partial_sum(trace: List[TraceStep], partials: List[int]) -> int:
+    """Sum partial products with a worked running two-addend column addition each step."""
+    if len(partials) == 1:
+        trace.append(TraceStep(op="single_partial", text=f"There is only one partial product, so the result is {partials[0]}.", meta={"result": partials[0]}))
+        return partials[0]
+    trace.append(TraceStep(op="sum_partials_intro", text=f"Now add the {len(partials)} partial products, one at a time, column by column from the right."))
+    acc = partials[0]
+    trace.append(TraceStep(op="running_start", text=f"Start with {acc}.", meta={"running": acc}))
+    for p in partials[1:]:
+        trace.append(TraceStep(op="add_partial", text=f"Add {p}: compute {acc}+{p}.", meta={"term": p, "running_before": acc}))
+        acc = emit_worked_addition(trace, acc, p)
+        trace.append(TraceStep(op="running_subtotal", text=f"  Running total: {acc}.", meta={"running_after": acc}))
+    return acc
+
+
+def emit_long_multiplication(trace: List[TraceStep], a: int, b: int) -> int:
+    """Append the full worked long-multiplication of a×b (per-digit partials + worked sum); return a×b.
+
+    复用于 long_multiplication 与 decimal_multiplication —— 报告 §2：小数乘法不得把整段整数乘法甩成一行。
+    """
+    trace.append(TraceStep(op="decompose_multiplier", text=f"Break the multiplier {b} into place-value digits, compute a partial product for each, then add them.", meta={"a": a, "b": b}))
     partials: List[int] = []
     for pos, ch in enumerate(str(b)[::-1]):
         digit = int(ch)
-        # Compute digit-sub-steps and emit as individual TraceSteps.
         trace.append(TraceStep(op="start_partial", text=f"Partial product for the {place_name(pos)} digit {digit}: compute {a}×{digit}.", meta={"position": pos, "digit": digit}))
         carry = 0
         partial_digits: List[int] = []
@@ -383,11 +425,10 @@ def gen_long_multiplication(rng: random.Random, cfg: GenConfig) -> Sample:
             write = prod % 10
             carry = prod // 10
             partial_digits.append(write)
-            if carry:
-                text = f"  {place_name(i)}: {da}×{digit}{' + ' + str(incoming) if incoming else ''} = {prod}, write {write}, carry {carry}"
-            else:
-                text = f"  {place_name(i)}: {da}×{digit}{' + ' + str(incoming) if incoming else ''} = {prod}, write {write}"
-            trace.append(TraceStep(op="multiply_digit", text=text, meta={"place": i, "a_digit": da, "digit": digit, "product": prod, "write": write, "carry": carry}))
+            base = f"  {place_name(i)}: {da}×{digit}={da * digit}"
+            base += f", plus carry {incoming} = {prod}" if incoming else ""
+            base += f", write {write}, carry {carry}" if carry else f", write {write}"
+            trace.append(TraceStep(op="multiply_digit", text=base, meta={"place": i, "a_digit": da, "digit": digit, "product": prod, "write": write, "carry": carry}))
         if carry:
             partial_digits.append(carry)
             trace.append(TraceStep(op="final_carry", text=f"  Final carry {carry} goes to the front."))
@@ -399,15 +440,28 @@ def gen_long_multiplication(rng: random.Random, cfg: GenConfig) -> Sample:
             zeros = "zero" if pos == 1 else "zeros"
             trace.append(TraceStep(op="shift_and_result", text=f"Because this digit is in the {place_name(pos)} place, append {pos} {zeros} to {partial_raw}, giving {shifted}.", meta={"raw": partial_raw, "shifted": shifted}))
         partials.append(shifted)
-    trace.append(TraceStep(op="sum_partial_products", text=f"Sum the partial products: {' + '.join(map(str, partials))} = {result}.", meta={"partials": partials, "result": result}))
+    result = emit_partial_sum(trace, partials)
+    return result
+
+
+def gen_long_multiplication(rng: random.Random, cfg: GenConfig) -> Sample:
+    diff = pick_difficulty(rng, cfg)
+    a_digits = {Difficulty.EASY: 2, Difficulty.MEDIUM: 3, Difficulty.HARD: 4}[diff]
+    b_digits = {Difficulty.EASY: 2, Difficulty.MEDIUM: 2, Difficulty.HARD: 3}[diff]
+    a = randint_digits(rng, a_digits)
+    b = randint_digits(rng, b_digits)
+    result = a * b
+
+    trace: List[TraceStep] = []
+    computed = emit_long_multiplication(trace, a, b)
     trace.append(TraceStep(op="finish", text=f"Therefore, {a}×{b}={result}.", after=str(result)))
     return make_sample(
         "arithmetic.long_multiplication",
         f"Compute {a}×{b}.",
         trace,
         str(result),
-        {"a": a, "b": b, "partials": partials, "difficulty": diff},
-        verified=(sum(partials) == result),
+        {"a": a, "b": b, "difficulty": diff},
+        verified=(computed == result),
     )
 
 
@@ -430,9 +484,13 @@ def long_division_steps(n: int, d: int) -> Tuple[int, int, List[TraceStep]]:
         quotient_digits.append(q_digit)
         started = True
         if q_digit == 0:
-            text = f"Since {current}<{d}, write 0 in the quotient for this place; 0×{d}=0, so the remainder stays {new_remainder}."
+            text = f"Since {current}<{d}, the quotient digit is 0 (because 0×{d}=0≤{current}<{d}=1×{d}); the remainder stays {new_remainder}."
         else:
-            text = f"{current}÷{d} gives quotient digit {q_digit}. Multiply back: {q_digit}×{d}={product}. Subtract: {current}-{product}={new_remainder}."
+            # 显式试商约束 + 自检：q 是使 q×d≤current 的最大数字；并验证 current-product≥0
+            next_prod = (q_digit + 1) * d
+            text = (f"{current}÷{d}: find the largest digit q with q×{d}≤{current}. "
+                    f"{q_digit}×{d}={product}≤{current}, but ({q_digit}+1)×{d}={next_prod}>{current}, so q={q_digit}. "
+                    f"Subtract: {current}-{product}={new_remainder} (it is ≥0 and <{d}, so q is correct).")
         trace.append(TraceStep(op="quotient_digit", text=text, meta={"current": current, "divisor": d, "quotient_digit": q_digit, "product": product, "new_remainder": new_remainder}))
         remainder = new_remainder
     if not quotient_digits:
@@ -742,12 +800,11 @@ def gen_decimal_multiplication(rng: random.Random, cfg: GenConfig) -> Sample:
     raw = a_int * b_int
     places = ap + bp
     answer = fmt_decimal_from_scaled(raw, places)
-    trace = [
-        TraceStep(op="ignore_decimal_points", text=f"Ignore the decimal points first: {a_str} becomes {abs(a_int)}, and {b_str} becomes {abs(b_int)}."),
-        TraceStep(op="multiply_integers", text=f"Multiply the integers: {abs(a_int)}×{abs(b_int)}={abs(raw)}."),
-        TraceStep(op="count_decimal_places", text=f"The factors have {ap}+{bp}={places} decimal place(s) total."),
-        TraceStep(op="place_decimal", text=f"Place the decimal point {places} place(s) from the right, giving {answer}."),
-    ]
+    trace = [TraceStep(op="ignore_decimal_points", text=f"Ignore the decimal points first: {a_str} becomes {abs(a_int)}, and {b_str} becomes {abs(b_int)}. Multiply these as whole numbers.")]
+    # 内联完整 long-multiplication，而非一行断言整段乘法
+    emit_long_multiplication(trace, abs(a_int), abs(b_int))
+    trace.append(TraceStep(op="count_decimal_places", text=f"The factors have {ap}+{bp}={places} decimal place(s) in total."))
+    trace.append(TraceStep(op="place_decimal", text=f"So place the decimal point {places} place(s) from the right of {abs(raw)}, giving {answer}."))
     return make_sample(
         "arithmetic.decimal_multiplication",
         f"Compute {a_str} × {b_str}.",
@@ -766,18 +823,19 @@ def gen_decimal_division_by_integer(rng: random.Random, cfg: GenConfig) -> Sampl
     dividend_scaled = quotient_scaled * divisor
     dividend = fmt_decimal_from_scaled(dividend_scaled, places)
     quotient = fmt_decimal_from_scaled(quotient_scaled, places)
-    trace = [
-        TraceStep(op="convert_to_scaled_integer", text=f"Treat {dividend} as the integer {dividend_scaled} with {places} decimal place(s)."),
-        TraceStep(op="divide_scaled_integer", text=f"Divide the scaled integer: {dividend_scaled}÷{divisor}={quotient_scaled}."),
-        TraceStep(op="restore_decimal", text=f"Restore {places} decimal place(s), giving {quotient}."),
-    ]
+    trace = [TraceStep(op="convert_to_scaled_integer", text=f"Treat {dividend} as the whole number {dividend_scaled} (it has {places} decimal place(s)), and divide it by {divisor}.")]
+    # 内联完整 worked long-division，而非一行断言
+    q, r, div_steps = long_division_steps(dividend_scaled, divisor)
+    trace.extend(div_steps)
+    trace.append(TraceStep(op="whole_quotient", text=f"So {dividend_scaled} ÷ {divisor} = {q}.", meta={"whole_quotient": q}))
+    trace.append(TraceStep(op="restore_decimal", text=f"Restore the {places} decimal place(s), giving {quotient}."))
     return make_sample(
         "arithmetic.decimal_division_by_integer",
         f"Compute {dividend} ÷ {divisor}.",
         trace,
         quotient,
         {"dividend": dividend, "divisor": divisor, "decimal_places": places, "difficulty": diff},
-        verified=(Decimal(quotient) == Decimal(dividend) / Decimal(divisor)),
+        verified=(q == quotient_scaled and r == 0 and Decimal(quotient) == Decimal(dividend) / Decimal(divisor)),
     )
 
 
@@ -1126,18 +1184,19 @@ def gen_decimal_division_by_decimal(rng: random.Random, cfg: GenConfig) -> Sampl
     # the resulting whole numbers exactly, then restore the decimal point. Dividend and
     # divisor are scaled by different powers, so the integer quotient is 10^places_q too
     # large; dividing by that many places gives the answer.
-    trace = [
-        TraceStep(op="drop_decimals", text=f"Remove the decimal points and divide as whole numbers: {dividend_str} has {places_dividend} decimal place(s) and {divisor_str} has {places_d}."),
-        TraceStep(op="integer_division", text=f"Divide the whole numbers: {dividend_scaled} ÷ {divisor_scaled} = {quotient_scaled}."),
-        TraceStep(op="place_decimal", text=f"The quotient has {places_dividend} - {places_d} = {places_q} decimal place(s), so the result is {quotient_str}."),
-    ]
+    trace = [TraceStep(op="drop_decimals", text=f"Remove the decimal points and divide as whole numbers: {dividend_str} has {places_dividend} decimal place(s) and {divisor_str} has {places_d}, so first compute the whole-number division {dividend_scaled} ÷ {divisor_scaled}.")]
+    # 内联完整 worked long-division，而非一行断言整段除法 (报告 §3)
+    q, r, div_steps = long_division_steps(dividend_scaled, divisor_scaled)
+    trace.extend(div_steps)
+    trace.append(TraceStep(op="whole_quotient", text=f"So {dividend_scaled} ÷ {divisor_scaled} = {q}.", meta={"whole_quotient": q}))
+    trace.append(TraceStep(op="place_decimal", text=f"The quotient has {places_dividend} - {places_d} = {places_q} decimal place(s), so place the decimal point and the result is {quotient_str}."))
     return make_sample(
         "arithmetic.decimal_division_by_decimal",
         f"Compute {dividend_str} ÷ {divisor_str}.",
         trace,
         quotient_str,
         {"dividend": dividend_str, "divisor": divisor_str, "places_q": places_q, "places_d": places_d, "difficulty": diff},
-        verified=(Decimal(dividend_str) / Decimal(divisor_str) == Decimal(quotient_str)),
+        verified=(q == quotient_scaled and r == 0 and Decimal(dividend_str) / Decimal(divisor_str) == Decimal(quotient_str)),
     )
 
 
